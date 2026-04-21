@@ -5,6 +5,7 @@ import sys
 import shutil
 import argparse
 import subprocess
+import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
@@ -93,7 +94,7 @@ def run_gui():
     """Simple Tkinter GUI for the Arthur Translation Layer."""
     window = tk.Tk()
     window.title("Arthur Translation Layer Manager")
-    window.geometry("700x500")
+    window.geometry("750x550")
 
     label = tk.Label(window, text="Arthur Translation Layer", font=("Arial", 16, "bold"))
     label.pack(pady=10)
@@ -101,7 +102,7 @@ def run_gui():
     btn_frame = tk.Frame(window)
     btn_frame.pack(pady=10)
 
-    log_area = scrolledtext.ScrolledText(window, width=80, height=15)
+    log_area = scrolledtext.ScrolledText(window, width=85, height=18)
     log_area.pack(pady=10, padx=10)
 
     def log(msg):
@@ -117,20 +118,29 @@ def run_gui():
         log_area.delete(1.0, tk.END)
         clean(log)
 
+    def install_worker(file_paths):
+        log(f">>> Batch Installation Started: {len(file_paths)} installers queued.")
+        for i, file_path in enumerate(file_paths):
+            log(f"\n[{i+1}/{len(file_paths)}] Installing: {os.path.basename(file_path)}")
+            try:
+                # Use subprocess.run to wait for the installer to finish before next one
+                process = subprocess.Popen([WINE_CMD, file_path])
+                process.wait()
+                log(f"[SUCCESS] Finished installer: {os.path.basename(file_path)}")
+            except Exception as e:
+                log(f"[ERROR] Failed during installation of {file_path}: {e}")
+        
+        log("\n>>> ALL INSTALLATIONS COMPLETE.")
+        log("[TIP] Click 'Scan & Sync Plugins' now to bridge your new tools!")
+
     def on_install():
-        file_path = filedialog.askopenfilename(
-            title="Select Windows Installer",
+        file_paths = filedialog.askopenfilenames(
+            title="Select Windows Installers (Select Multiple!)",
             filetypes=[("Installers", "*.exe *.msi"), ("All files", "*.*")]
         )
-        if file_path:
-            log(f">>> Running Installer: {file_path}")
-            try:
-                # Run the installer using the bundled wine
-                subprocess.Popen([WINE_CMD, file_path])
-                log("[INFO] Installer started. Please follow the instructions in the installer window.")
-                log("[TIP] After installation, click 'Scan & Sync Plugins' to bridge the new plugin.")
-            except Exception as e:
-                log(f"[ERROR] Failed to start installer: {e}")
+        if file_paths:
+            # Run installation in a separate thread so GUI doesn't freeze
+            threading.Thread(target=install_worker, args=(file_paths,), daemon=True).start()
 
     def on_status():
         log_area.delete(1.0, tk.END)
@@ -144,10 +154,10 @@ def run_gui():
             for item in LINUX_VST3_DIR.iterdir():
                 log(f"  - {item.name}")
 
-    tk.Button(btn_frame, text="Install New Plugin (.exe)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=0, padx=5)
+    tk.Button(btn_frame, text="Batch Install (.exe/.msi)", command=on_install, width=25, bg="#2196F3", fg="white").grid(row=0, column=0, padx=5)
     tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=22, bg="#4CAF50", fg="white").grid(row=0, column=1, padx=5)
-    tk.Button(btn_frame, text="Show Status", command=on_status, width=15).grid(row=0, column=2, padx=5)
-    tk.Button(btn_frame, text="Clean All", command=on_clean, width=15, bg="#F44336", fg="white").grid(row=0, column=3, padx=5)
+    tk.Button(btn_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=2, padx=5)
+    tk.Button(btn_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=3, padx=5)
 
     on_status()
     window.mainloop()
