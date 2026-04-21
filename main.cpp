@@ -12,13 +12,14 @@
 #include <pluginterfaces/vst/ivsteditcontroller.h>
 #include <pluginterfaces/base/ipluginbase.h>
 
+#ifndef SMTG_EXPORT_SYMBOL
+#define SMTG_EXPORT_SYMBOL __attribute__ ((visibility ("default")))
+#endif
+
 using namespace arthur;
 
 namespace arthur {
 
-/**
- * A dynamic factory that generates unique IDs and names based on its own filename.
- */
 class ArthurPluginFactory : public Steinberg::IPluginFactory {
 public:
     ArthurPluginFactory() {
@@ -42,9 +43,10 @@ public:
 
     // IPluginFactory
     Steinberg::tresult PLUGIN_API getFactoryInfo(Steinberg::PFactoryInfo* info) override {
-        std::strncpy(info->vendor, "Arthur Audio", sizeof(info->vendor));
-        std::strncpy(info->url, "https://github.com/danny1marshall1587-maker/arthur-translation-layer", sizeof(info->url));
-        std::strncpy(info->email, "support@arthur.audio", sizeof(info->email));
+        std::memset(info, 0, sizeof(Steinberg::PFactoryInfo));
+        std::strncpy(info->vendor, "Arthur Audio", sizeof(info->vendor) - 1);
+        std::strncpy(info->url, "https://arthur.audio", sizeof(info->url) - 1);
+        std::strncpy(info->email, "support@arthur.audio", sizeof(info->email) - 1);
         info->flags = 0;
         return Steinberg::kResultOk;
     }
@@ -54,10 +56,11 @@ public:
     Steinberg::tresult PLUGIN_API getClassInfo(Steinberg::int32 index, Steinberg::PClassInfo* info) override {
         if (index != 0) return Steinberg::kInvalidArgument;
         
+        std::memset(info, 0, sizeof(Steinberg::PClassInfo));
         std::memcpy(info->cid, plugin_cid_, sizeof(Steinberg::TUID));
         info->cardinality = Steinberg::PClassInfo::kManyInstances;
-        std::strncpy(info->category, "Audio Module Class", sizeof(info->category));
-        std::strncpy(info->name, plugin_name_.c_str(), sizeof(info->name));
+        std::strncpy(info->category, "Audio Module Class", sizeof(info->category) - 1);
+        std::strncpy(info->name, plugin_name_.c_str(), sizeof(info->name) - 1);
         return Steinberg::kResultOk;
     }
 
@@ -71,16 +74,12 @@ private:
     std::string plugin_name_ = "Arthur Bridged Plugin";
     Steinberg::TUID plugin_cid_ = {0};
 
-    /**
-     * Detects our own filename and generates a unique name/CID.
-     */
     void update_identity() {
         Dl_info info;
-        if (dladdr((void*)GetPluginFactory, &info) && info.dli_fname) {
+        if (dladdr((void*)update_identity_static, &info) && info.dli_fname) {
             char* path_copy = strdup(info.dli_fname);
             char* base = basename(path_copy);
             
-            // Strip .so extension
             std::string name(base);
             size_t last_dot = name.find_last_of(".");
             if (last_dot != std::string::npos) {
@@ -89,10 +88,14 @@ private:
             
             plugin_name_ = "Arthur: " + name;
             
-            // Generate a simple hash for the CID
+            // Generate a professional 128-bit GUID
             std::memset(plugin_cid_, 0, sizeof(Steinberg::TUID));
-            plugin_cid_[0] = 0x41; // 'A'
-            plugin_cid_[1] = 0x52; // 'R'
+            
+            // Fixed Prefix for Arthur
+            plugin_cid_[0] = 0x41; // A
+            plugin_cid_[1] = 0x52; // R
+            plugin_cid_[2] = 0x54; // T
+            plugin_cid_[3] = 0x48; // H
             
             uint32_t hash = 0x811c9dc5;
             for (char c : name) {
@@ -100,13 +103,19 @@ private:
                 hash *= 0x01000193;
             }
             
-            // Inject hash into CID
-            std::memcpy(plugin_cid_ + 8, &hash, sizeof(hash));
+            // Inject hash into multiple segments of the GUID to ensure uniqueness
+            std::memcpy(plugin_cid_ + 4, &hash, sizeof(hash));
+            uint32_t hash2 = hash ^ 0xAAAAAAAA;
+            std::memcpy(plugin_cid_ + 8, &hash2, sizeof(hash2));
+            uint32_t hash3 = hash ^ 0x55555555;
+            std::memcpy(plugin_cid_ + 12, &hash3, sizeof(hash3));
             
             free(path_copy);
             std::cout << "[Arthur Bridge] Self-Identified as: " << plugin_name_ << std::endl;
         }
     }
+
+    static void update_identity_static() {}
 };
 
 static ArthurPluginFactory* gFactory = nullptr;
@@ -117,11 +126,30 @@ static ArthurPluginFactory* gFactory = nullptr;
 
 extern "C" {
 
+/**
+ * MANDATORY: The primary factory entry point.
+ */
 SMTG_EXPORT_SYMBOL Steinberg::IPluginFactory* PLUGIN_API GetPluginFactory() {
     if (!arthur::gFactory) {
         arthur::gFactory = new arthur::ArthurPluginFactory();
     }
     return arthur::gFactory;
+}
+
+/**
+ * OPTIONAL BUT RECOMMENDED: Module initialization.
+ */
+SMTG_EXPORT_SYMBOL bool PLUGIN_API ModuleEntry(void* sharedLibraryHandle) {
+    std::cout << "[Arthur Bridge] ModuleEntry called." << std::endl;
+    return true;
+}
+
+/**
+ * OPTIONAL BUT RECOMMENDED: Module cleanup.
+ */
+SMTG_EXPORT_SYMBOL bool PLUGIN_API ModuleExit() {
+    std::cout << "[Arthur Bridge] ModuleExit called." << std::endl;
+    return true;
 }
 
 bool arthur_init_bridge() { return true; }
