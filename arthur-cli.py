@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.5.1"
+VERSION = "v1.5.2"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -267,7 +267,7 @@ def run_gui():
         
         update_progress(100)
         log("\n>>> PLUGINS IMPORTED. Running Scan & Sync...")
-        on_sync()
+        window.after(100, on_sync)
         log("[SUCCESS] All plugins are ready for your DAW!")
 
     def on_install_vst():
