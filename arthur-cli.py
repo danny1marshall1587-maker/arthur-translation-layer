@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.7.9"
+VERSION = "v1.8.0"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -445,11 +445,20 @@ def run_gui():
         ]
         
         # Check for system dependencies needed by winetricks
-        log("    [CHECK] Verifying system dependencies (cabextract, unzip)...")
+        log(">>> [STATION 4] Verifying system dependencies...")
         for tool in ["cabextract", "unzip"]:
-            if not shutil.which(tool):
-                log(f"    [WARNING] Missing '{tool}'! Some libraries might fail to install.")
-                log(f"    -> Please run: sudo apt install {tool}")
+            log(f"    [CHECK] Looking for {tool}...")
+            try:
+                # Use a fast subprocess check instead of shutil.which to avoid path hangs
+                result = subprocess.run(["which", tool], capture_output=True, text=True, check=False)
+                if result.returncode != 0:
+                    log(f"    [MISSING] {tool} not found. Attempting automatic installation...")
+                    # Use pkexec to prompt for password and install the missing tool
+                    subprocess.run(["pkexec", "apt-get", "install", "-y", tool], check=False)
+                else:
+                    log(f"    [OK] {tool} found.")
+            except Exception as e:
+                log(f"    [INFO] Dependency check for {tool}: {e}")
         
         # Calculate total individual libraries for smooth progress
         total_libs = sum(len(libs) for _, libs in tasks)
