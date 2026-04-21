@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.4"
+VERSION = "v1.4.5"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -152,34 +152,47 @@ def run_gui():
         log_area.see(tk.END)
         window.update_idletasks()
 
-    def on_sync():
-        log_area.delete(1.0, tk.END)
-        sync(log)
-    
-    def on_clean():
-        log_area.delete(1.0, tk.END)
-        clean(log)
+    # Log Area
+    log_area = scrolledtext.ScrolledText(window, width=90, height=20, bg="black", fg="#00FF00", font=("Monospace", 10))
+    log_area.pack(pady=10, padx=10)
+
+    # Progress Bar
+    progress_frame = tk.Frame(window)
+    progress_frame.pack(fill="x", padx=10, pady=5)
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(progress_frame, variable=progress_var, maximum=100)
+    progress_bar.pack(fill="x")
+
+    def log(msg):
+        log_area.insert(tk.END, msg + "\n")
+        log_area.see(tk.END)
+        window.update_idletasks()
+
+    def update_progress(val):
+        progress_var.set(val)
+        window.update_idletasks()
 
     def update_worker(download_url):
         log(f">>> DOWNLOADING UPDATE: {download_url}")
+        update_progress(10)
         try:
-            # Download to a temporary location
             temp_path = INSTALL_PATH.with_suffix(".tmp")
             urllib.request.urlretrieve(download_url, temp_path)
+            update_progress(90)
             temp_path.chmod(0o755)
             
-            # If we are running as an AppImage, we tell the user to restart
             if os.environ.get('APPIMAGE'):
                 log("[SUCCESS] Update downloaded successfully.")
                 log(f"[ACTION REQUIRED] Please replace your current AppImage with the new one found at: {temp_path}")
                 messagebox.showinfo("Update Ready", f"The new version has been downloaded to:\n\n{temp_path}\n\nPlease replace your current AppImage file with this one and restart.")
             else:
-                # If running as script, we can replace the standard install path
                 log("[SUCCESS] Update downloaded. Ready to replace.")
                 shutil.move(temp_path, INSTALL_PATH)
                 log("Update applied to ~/.local/bin/arthur-manager.")
+            update_progress(100)
         except Exception as e:
             log(f"[ERROR] Failed to download update: {e}")
+            update_progress(0)
 
     def on_check_updates():
         log(">>> Checking for updates...")
@@ -200,34 +213,44 @@ def run_gui():
         except Exception as e:
             log(f"[ERROR] Could not check for updates: {e}")
 
-    def on_install_to_system():
+    def on_install_to_system(silent=False):
         """Copies the running AppImage to the standard install path."""
         try:
             appimage_path = os.environ.get('APPIMAGE')
             if not appimage_path:
-                messagebox.showwarning("Installation", "You are not running from an AppImage. Installation is only supported for AppImage versions.")
+                if not silent:
+                    messagebox.showwarning("Installation", "You are not running from an AppImage. Installation is only supported for AppImage versions.")
                 return
 
             if Path(appimage_path) == INSTALL_PATH:
-                messagebox.showinfo("Installation", "Arthur is already installed and running from the system location.")
+                if not silent:
+                    messagebox.showinfo("Installation", "Arthur is already installed and running from the system location.")
                 return
 
-            if messagebox.askyesno("Install to System", f"Would you like to install Arthur to your system?\n\nThis will copy it to: {INSTALL_PATH}\nand add it to your Start Menu."):
+            if silent or messagebox.askyesno("Install to System", f"Welcome to Arthur!\n\nWould you like to install Arthur to your system?\n\nThis will copy it to: {INSTALL_PATH}\nand add it to your Start Menu."):
                 log(">>> Installing Arthur to system...")
+                update_progress(20)
                 setup_directories()
+                update_progress(50)
                 shutil.copy2(appimage_path, INSTALL_PATH)
                 INSTALL_PATH.chmod(0o755)
-                install_desktop_entry() # Refresh desktop entry to point to the new path
+                update_progress(80)
+                install_desktop_entry() 
+                update_progress(100)
                 log(f"[SUCCESS] Arthur installed to {INSTALL_PATH}")
                 log("[INFO] You can now delete the AppImage from your Downloads folder.")
-                messagebox.showinfo("Installation Success", "Arthur has been installed to your system!\n\nYou can now launch it from your application menu.")
+                if not silent:
+                    messagebox.showinfo("Installation Success", "Arthur has been installed to your system!\n\nYou can now launch it from your application menu.")
         except Exception as e:
             log(f"[ERROR] Installation failed: {e}")
+            update_progress(0)
 
     def install_worker(file_paths):
         log(f">>> Batch Installation Started: {len(file_paths)} installers queued.")
+        total = len(file_paths)
         for i, file_path in enumerate(file_paths):
-            log(f"\n[{i+1}/{len(file_paths)}] Installing: {os.path.basename(file_path)}")
+            log(f"\n[{i+1}/{total}] Installing: {os.path.basename(file_path)}")
+            update_progress((i / total) * 100)
             try:
                 process = subprocess.Popen([WINE_CMD, file_path])
                 process.wait()
@@ -235,6 +258,7 @@ def run_gui():
             except Exception as e:
                 log(f"[ERROR] Failed during installation of {file_path}: {e}")
         
+        update_progress(100)
         log("\n>>> ALL INSTALLATIONS COMPLETE.")
         log("[TIP] Click 'Scan & Sync Plugins' now to bridge your new tools!")
 
@@ -247,7 +271,8 @@ def run_gui():
             threading.Thread(target=install_worker, args=(file_paths,), daemon=True).start()
 
     def prep_worker():
-        log(">>> PREPARING WINE FOR PRO AUDIO (This may take a few minutes)...")
+        log(">>> PREPARING WINE FOR PRO AUDIO...")
+        update_progress(5)
         winetricks_path = Path.home() / ".cache" / "arthur" / "winetricks"
         winetricks_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -259,7 +284,8 @@ def run_gui():
             except Exception as e:
                 log(f"[ERROR] Failed to download winetricks: {e}")
                 return
-
+        
+        update_progress(20)
         log("[2/3] Installing core libraries (vcrun2015, d3dcompiler_47, corefonts)...")
         try:
             subprocess.run([str(winetricks_path), "-q", "vcrun2015", "d3dcompiler_47", "corefonts"], check=True)
@@ -267,6 +293,7 @@ def run_gui():
         except Exception as e:
             log(f"[ERROR] Failed to install core libraries: {e}")
 
+        update_progress(60)
         log("[3/3] Installing DXVK (Vulkan Graphics)...")
         try:
             subprocess.run([str(winetricks_path), "-q", "dxvk"], check=True)
@@ -274,6 +301,7 @@ def run_gui():
         except Exception as e:
             log(f"[ERROR] Failed to enable DXVK: {e}")
 
+        update_progress(100)
         log("\n>>> WINE ENVIRONMENT IS NOW PRO-READY.")
 
     def on_prepare():
@@ -304,8 +332,15 @@ def run_gui():
     tk.Button(status_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=1, padx=5)
     tk.Button(status_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=2, padx=5)
 
-
     on_status()
+    
+    # Auto-Install Logic for New Users
+    appimage_path = os.environ.get('APPIMAGE')
+    if appimage_path and Path(appimage_path) != INSTALL_PATH:
+        # We are running from a temporary location (Downloads), prompt to install
+        log("\n[!] Arthur is not installed to your system yet.")
+        threading.Thread(target=lambda: on_install_to_system(silent=False), daemon=True).start()
+
     window.mainloop()
 
 def main():
