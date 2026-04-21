@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.7.7"
+VERSION = "v1.7.8"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -424,9 +424,15 @@ def run_gui():
             env["WINEDLLOVERRIDES"] = "mscoree=d;mshtml=d"
             
             log(f"    [INFO] Using binary: {WINE_CMD}")
-            subprocess.run([WINE_CMD, "wineboot", "-u"], env=env, check=False, timeout=60)
+            # Reduced timeout - registry files usually finish much faster
+            try:
+                subprocess.run([WINE_CMD, "wineboot", "-u"], env=env, check=False, timeout=35)
+                log("    [OK] Prefix base initialized.")
+            except subprocess.TimeoutExpired:
+                log("    [INFO] Initialization time-out (likely finished). Proceeding...")
+            
             import time
-            time.sleep(5)
+            time.sleep(3)
         except Exception as e:
             log(f"    [INFO] Initial bootstrapper: {e}")
 
