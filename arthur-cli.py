@@ -395,27 +395,50 @@ def run_gui():
                 return
         
         update_progress(20)
-        # Sequential winetricks calls for maximum reliability
+        
+        # Kill any existing wine processes to prevent lock collisions
+        try:
+            subprocess.run(["wineserver", "-k"], env=env, check=False)
+            import time
+            time.sleep(2)
+        except:
+            pass
+
         tasks = [
-            ("Core Libraries (vcrun2015, mfc42)", ["vcrun2015", "mfc42"]),
-            ("UI Support (msxml6, riched20, comctl32)", ["msxml6", "riched20", "comctl32"]),
-            ("Graphics Support (d3dcompiler_47)", ["d3dcompiler_47"]),
-            ("Essential Fonts (corefonts)", ["corefonts"]),
-            ("Vulkan Graphics (dxvk)", ["dxvk"])
+            ("Core Libraries", ["vcrun2015", "mfc42"]),
+            ("UI Support", ["msxml6", "riched20", "comctl32"]),
+            ("Graphics Support", ["d3dcompiler_47"]),
+            ("Essential Fonts", ["corefonts"]),
+            ("Vulkan Graphics", ["dxvk"])
         ]
         
-        for i, (name, args) in enumerate(tasks):
-            log(f"[{i+2}/5] Installing {name}...")
-            try:
-                subprocess.run([str(winetricks_path), "-q"] + args, env=env, check=True)
-                log(f"    [OK] {name}")
-            except Exception as e:
-                log(f"    [RETRY] Sequential installation failed for {name}, trying isolated mode...")
+        # Calculate total individual libraries for smooth progress
+        total_libs = sum(len(libs) for _, libs in tasks)
+        lib_idx = 0
+        
+        for group_name, libs in tasks:
+            log(f">>> Processing {group_name}...")
+            for lib in libs:
+                lib_idx += 1
+                log(f"    [{lib_idx}/{total_libs}] Installing {lib}...")
                 try:
-                    subprocess.run([str(winetricks_path), "-q"] + args, env=env, check=False)
-                except:
-                    log(f"    [FAIL] {name}: {e}")
-            update_progress(20 + (i + 1) * 20)
+                    # Strictly sequential: one-by-one
+                    subprocess.run([str(winetricks_path), "-q", lib], env=env, check=True)
+                    # Let the prefix settle to prevent lock issues
+                    import time
+                    time.sleep(3)
+                    log(f"    [OK] {lib}")
+                except Exception as e:
+                    log(f"    [RETRY] Failed {lib}, attempting force...")
+                    try:
+                        subprocess.run([str(winetricks_path), "-q", "--force", lib], env=env, check=False)
+                        import time
+                        time.sleep(3)
+                    except:
+                        log(f"    [FAIL] {lib}: {e}")
+                
+                # Smooth progress update (from 20% to 95%)
+                update_progress(20 + int((lib_idx / total_libs) * 75))
 
         log("\n>>> WINE ENVIRONMENT IS NOW PRO-READY.")
 
