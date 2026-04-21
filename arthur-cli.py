@@ -149,23 +149,22 @@ def sync(log_callback=print):
         # Create a proper VST3 bundle structure: PluginName.vst3/Contents/x86_64-linux/
         bundle_dir = LINUX_VST3_DIR / plugin.name
         binary_dir = bundle_dir / "Contents" / "x86_64-linux"
-        
-        if bundle_dir.exists():
-            log_callback(f"[-] Skipping (already exists): {plugin.name}")
-            continue
+        target_bin = binary_dir / (plugin.stem + ".so")
 
         try:
             binary_dir.mkdir(parents=True, exist_ok=True)
-            # The binary inside the bundle must have a .so suffix or the same name as the bundle
-            target_link = binary_dir / (plugin.stem + ".so")
-            os.symlink(BRIDGE_SO_PATH, target_link)
+            
+            # Use direct copy instead of symlinks for sandbox compatibility
+            import shutil
+            shutil.copy2(BRIDGE_SO_PATH, target_bin)
+            target_bin.chmod(0o755)
             
             log_callback(f"[+] Synced Bundle: {plugin.name}")
             synced_count += 1
         except Exception as e:
             log_callback(f"[ERROR] Failed to bridge {plugin.name}: {e}")
 
-    log_callback(f"\n>>> Sync Complete! {synced_count} new plugins bridged.")
+    log_callback(f"\n>>> Sync Complete! {synced_count} plugins refreshed.")
 
 def clean(log_callback=print):
     """Removes all bridged plugins."""
