@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.5.0"
+VERSION = "v1.5.1"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -245,6 +245,39 @@ def run_gui():
             log(f"[ERROR] Installation failed: {e}")
             update_progress(0)
 
+    def vst_worker(file_paths):
+        log(f">>> Batch Plugin Import Started: {len(file_paths)} plugins queued.")
+        total = len(file_paths)
+        
+        for i, file_path in enumerate(file_paths):
+            dest_name = os.path.basename(file_path)
+            log(f"[{i+1}/{total}] Copying: {dest_name}")
+            update_progress((i / total) * 100)
+            try:
+                # Copy the VST3 file or directory to the Linux VST3 folder
+                dest_path = LINUX_VST3_DIR / dest_name
+                if os.path.isdir(file_path):
+                    if dest_path.exists(): shutil.rmtree(dest_path)
+                    shutil.copytree(file_path, dest_path)
+                else:
+                    shutil.copy2(file_path, dest_path)
+                log(f"    [OK] {dest_name}")
+            except Exception as e:
+                log(f"    [ERROR] Failed to copy {dest_name}: {e}")
+        
+        update_progress(100)
+        log("\n>>> PLUGINS IMPORTED. Running Scan & Sync...")
+        on_sync()
+        log("[SUCCESS] All plugins are ready for your DAW!")
+
+    def on_install_vst():
+        file_paths = filedialog.askopenfilenames(
+            title="Select VST3 Plugins (Select Multiple!)",
+            filetypes=[("VST3 Plugins", "*.vst3"), ("All files", "*.*")]
+        )
+        if file_paths:
+            threading.Thread(target=vst_worker, args=(file_paths,), daemon=True).start()
+
     def install_worker(file_paths):
         log(f">>> Batch Installation Started: {len(file_paths)} installers queued.")
         total = len(file_paths)
@@ -338,15 +371,16 @@ def run_gui():
                 log(f"  - {item.name}")
 
     tk.Button(btn_frame, text="Prepare Wine for Pro Audio", command=on_prepare, width=22, bg="#FF9800", fg="white").grid(row=0, column=0, padx=5)
-    tk.Button(btn_frame, text="Batch Install (.exe/.msi)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=1, padx=5)
-    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=20, bg="#4CAF50", fg="white").grid(row=0, column=2, padx=5)
-    tk.Button(btn_frame, text="Check Updates", command=on_check_updates, width=15, bg="#9C27B0", fg="white").grid(row=0, column=3, padx=5)
+    tk.Button(btn_frame, text="Install Windows Plugins (.exe)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=1, padx=5)
+    tk.Button(btn_frame, text="Install VST3 Plugins (.vst3)", command=on_install_vst, width=22, bg="#00BCD4", fg="white").grid(row=0, column=2, padx=5)
+    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=20, bg="#4CAF50", fg="white").grid(row=0, column=3, padx=5)
     
     status_frame = tk.Frame(window)
     status_frame.pack(pady=5)
     tk.Button(status_frame, text="Install to System", command=on_install_to_system, width=15, bg="#607D8B", fg="white").grid(row=0, column=0, padx=5)
     tk.Button(status_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=1, padx=5)
-    tk.Button(status_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=2, padx=5)
+    tk.Button(status_frame, text="Check Updates", command=on_check_updates, width=15, bg="#9C27B0", fg="white").grid(row=0, column=2, padx=5)
+    tk.Button(status_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=3, padx=5)
 
     on_status()
     
