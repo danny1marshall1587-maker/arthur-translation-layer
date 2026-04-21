@@ -195,6 +195,30 @@ def run_gui():
         except Exception as e:
             log(f"[ERROR] Could not check for updates: {e}")
 
+    def on_install_to_system():
+        """Copies the running AppImage to the standard install path."""
+        try:
+            appimage_path = os.environ.get('APPIMAGE')
+            if not appimage_path:
+                messagebox.showwarning("Installation", "You are not running from an AppImage. Installation is only supported for AppImage versions.")
+                return
+
+            if Path(appimage_path) == INSTALL_PATH:
+                messagebox.showinfo("Installation", "Arthur is already installed and running from the system location.")
+                return
+
+            if messagebox.askyesno("Install to System", f"Would you like to install Arthur to your system?\n\nThis will copy it to: {INSTALL_PATH}\nand add it to your Start Menu."):
+                log(">>> Installing Arthur to system...")
+                setup_directories()
+                shutil.copy2(appimage_path, INSTALL_PATH)
+                INSTALL_PATH.chmod(0o755)
+                install_desktop_entry() # Refresh desktop entry to point to the new path
+                log(f"[SUCCESS] Arthur installed to {INSTALL_PATH}")
+                log("[INFO] You can now delete the AppImage from your Downloads folder.")
+                messagebox.showinfo("Installation Success", "Arthur has been installed to your system!\n\nYou can now launch it from your application menu.")
+        except Exception as e:
+            log(f"[ERROR] Installation failed: {e}")
+
     def install_worker(file_paths):
         log(f">>> Batch Installation Started: {len(file_paths)} installers queued.")
         for i, file_path in enumerate(file_paths):
@@ -271,8 +295,10 @@ def run_gui():
     
     status_frame = tk.Frame(window)
     status_frame.pack(pady=5)
-    tk.Button(status_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=0, padx=5)
-    tk.Button(status_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=1, padx=5)
+    tk.Button(status_frame, text="Install to System", command=on_install_to_system, width=15, bg="#607D8B", fg="white").grid(row=0, column=0, padx=5)
+    tk.Button(status_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=1, padx=5)
+    tk.Button(status_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=2, padx=5)
+
 
     on_status()
     window.mainloop()
