@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 import shutil
 import argparse
 import subprocess
 import threading
+import urllib.request
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
@@ -17,6 +16,7 @@ APPDIR = os.environ.get('APPDIR')
 DEFAULT_WINE_PREFIX = Path.home() / ".wine"
 WINE_VST3_DIR = DEFAULT_WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST3"
 LINUX_VST3_DIR = Path.home() / ".vst3" / "Arthur"
+WINETRICKS_URL = "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks"
 
 # Path to the bridge library
 if APPDIR:
@@ -94,7 +94,7 @@ def run_gui():
     """Simple Tkinter GUI for the Arthur Translation Layer."""
     window = tk.Tk()
     window.title("Arthur Translation Layer Manager")
-    window.geometry("750x550")
+    window.geometry("800x600")
 
     label = tk.Label(window, text="Arthur Translation Layer", font=("Arial", 16, "bold"))
     label.pack(pady=10)
@@ -102,7 +102,7 @@ def run_gui():
     btn_frame = tk.Frame(window)
     btn_frame.pack(pady=10)
 
-    log_area = scrolledtext.ScrolledText(window, width=85, height=18)
+    log_area = scrolledtext.ScrolledText(window, width=95, height=20)
     log_area.pack(pady=10, padx=10)
 
     def log(msg):
@@ -142,6 +142,46 @@ def run_gui():
             # Run installation in a separate thread so GUI doesn't freeze
             threading.Thread(target=install_worker, args=(file_paths,), daemon=True).start()
 
+    def prep_worker():
+        log(">>> PREPARING WINE FOR PRO AUDIO (This may take a few minutes)...")
+        
+        winetricks_path = Path.home() / ".cache" / "arthur" / "winetricks"
+        winetricks_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not winetricks_path.exists():
+            log("[1/3] Downloading winetricks...")
+            try:
+                urllib.request.urlretrieve(WINETRICKS_URL, winetricks_path)
+                winetricks_path.chmod(0o755)
+            except Exception as e:
+                log(f"[ERROR] Failed to download winetricks: {e}")
+                return
+
+        log("[2/3] Installing core libraries (vcrun2015, d3dcompiler_47, corefonts)...")
+        log("      * This fixes installer crashes and UI fonts.")
+        try:
+            # -q for quiet mode
+            subprocess.run([str(winetricks_path), "-q", "vcrun2015", "d3dcompiler_47", "corefonts"], check=True)
+            log("[SUCCESS] Core libraries installed.")
+        except Exception as e:
+            log(f"[ERROR] Failed to install core libraries: {e}")
+
+        log("[3/3] Installing DXVK (Vulkan Graphics)...")
+        log("      * This fixes flickering/black-screen GUIs in FabFilter, Neural DSP, etc.")
+        try:
+            subprocess.run([str(winetricks_path), "-q", "dxvk"], check=True)
+            log("[SUCCESS] DXVK enabled.")
+        except Exception as e:
+            log(f"[ERROR] Failed to enable DXVK: {e}")
+
+        log("\n>>> WINE ENVIRONMENT IS NOW PRO-READY.")
+        log("You can now install complex plugins (Waves, NI, etc.) with much higher success rates.")
+
+    def on_prepare():
+        if messagebox.askyesno("Prepare Wine", "This will install Visual C++, DirectX components, and Vulkan Graphics into your Wine prefix. This is recommended for high-end plugins.\n\nContinue?"):
+            log_area.delete(1.0, tk.END)
+            threading.Thread(target=prep_worker, daemon=True).start()
+
     def on_status():
         log_area.delete(1.0, tk.END)
         log(">>> Arthur Translation Layer Status\n")
@@ -154,10 +194,14 @@ def run_gui():
             for item in LINUX_VST3_DIR.iterdir():
                 log(f"  - {item.name}")
 
-    tk.Button(btn_frame, text="Batch Install (.exe/.msi)", command=on_install, width=25, bg="#2196F3", fg="white").grid(row=0, column=0, padx=5)
-    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=22, bg="#4CAF50", fg="white").grid(row=0, column=1, padx=5)
-    tk.Button(btn_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=2, padx=5)
-    tk.Button(btn_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=3, padx=5)
+    tk.Button(btn_frame, text="Prepare Wine for Pro Audio", command=on_prepare, width=25, bg="#FF9800", fg="white").grid(row=0, column=0, padx=5)
+    tk.Button(btn_frame, text="Batch Install (.exe/.msi)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=1, padx=5)
+    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=20, bg="#4CAF50", fg="white").grid(row=0, column=2, padx=5)
+    
+    status_frame = tk.Frame(window)
+    status_frame.pack(pady=5)
+    tk.Button(status_frame, text="Show Status", command=on_status, width=12).grid(row=0, column=0, padx=5)
+    tk.Button(status_frame, text="Clean All", command=on_clean, width=12, bg="#F44336", fg="white").grid(row=0, column=1, padx=5)
 
     on_status()
     window.mainloop()
@@ -191,9 +235,6 @@ def status_terminal():
         print("Currently Synced Plugins:")
         for item in LINUX_VST3_DIR.iterdir():
             print(f"  - {item.name}")
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
