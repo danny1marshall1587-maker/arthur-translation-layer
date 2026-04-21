@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Get the directory where the AppImage is mounted
+SELF=$(readlink -f "$0")
+HERE=${SELF%/*}
+
+# Set environment variables for bundled Wine and Arthur
+export PATH="$HERE/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
+export WINEDEBUG="-all"
+export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
+
+# Run the Arthur Manager GUI
+exec python3 "$HERE/usr/bin/arthur-cli.py" "gui" "$@"

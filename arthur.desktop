@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Arthur Translation Layer
+Comment=Wayland-native VST3 Translation Layer Manager
+Exec=arthur-cli.py
+Icon=arthur
+Categories=AudioVideo;Audio;
+Terminal=false

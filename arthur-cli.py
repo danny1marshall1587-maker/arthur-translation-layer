@@ -4,16 +4,23 @@ import os
 import sys
 import shutil
 import argparse
+import tkinter as tk
+from tkinter import messagebox, scrolledtext
 from pathlib import Path
+
+# Detect AppImage environment
+APPDIR = os.environ.get('APPDIR')
 
 # Defaults
 DEFAULT_WINE_PREFIX = Path.home() / ".wine"
 WINE_VST3_DIR = DEFAULT_WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST3"
 LINUX_VST3_DIR = Path.home() / ".vst3" / "Arthur"
 
-# The compiled bridge library that will be symlinked/copied
-# Assuming the user runs this from the project root after compiling
-BRIDGE_SO_PATH = Path.cwd() / "build" / "libarthur_bridge.so"
+# Path to the bridge library
+if APPDIR:
+    BRIDGE_SO_PATH = Path(APPDIR) / "usr" / "lib" / "libarthur_bridge.so"
+else:
+    BRIDGE_SO_PATH = Path.cwd() / "build" / "libarthur_bridge.so"
 
 def setup_directories():
     """Ensure the target Linux VST3 directory exists."""
@@ -22,56 +29,50 @@ def setup_directories():
 def find_wine_plugins():
     """Scans the Wine VST3 directory for plugin folders/files."""
     if not WINE_VST3_DIR.exists():
-        print(f"[!] Warning: Wine VST3 directory not found at {WINE_VST3_DIR}")
         return []
 
     plugins = []
-    # VST3 plugins can be .vst3 directories or just .vst3 files
     for item in WINE_VST3_DIR.iterdir():
         if item.suffix.lower() == '.vst3':
             plugins.append(item)
     return plugins
 
-def sync():
-    """Scans Wine directory and creates bridge links in the Linux VST3 folder."""
-    print(">>> Scanning for Windows VST3 plugins...")
+def sync(log_callback=print):
+    """Scans Wine directory and creates bridge links."""
+    log_callback(">>> Scanning for Windows VST3 plugins...")
     
     if not BRIDGE_SO_PATH.exists():
-        print(f"[ERROR] Bridge library not found at {BRIDGE_SO_PATH}")
-        print("Please compile the Arthur Translation Layer first by running 'make' in the build directory.")
+        log_callback(f"[ERROR] Bridge library not found at {BRIDGE_SO_PATH}")
         return
 
     setup_directories()
     plugins = find_wine_plugins()
 
     if not plugins:
-        print("No plugins found to sync.")
+        log_callback("No plugins found to sync.")
         return
 
     synced_count = 0
     for plugin in plugins:
         target_link = LINUX_VST3_DIR / plugin.name
-        
-        # If a link or file already exists, skip it unless forced or clean is run
         if target_link.exists():
-            print(f"[-] Skipping (already exists): {plugin.name}")
+            log_callback(f"[-] Skipping (already exists): {plugin.name}")
             continue
 
         try:
-            # Create a symlink to the compiled bridge, named as the plugin
             os.symlink(BRIDGE_SO_PATH, target_link)
-            print(f"[+] Synced: {plugin.name}")
+            log_callback(f"[+] Synced: {plugin.name}")
             synced_count += 1
         except Exception as e:
-            print(f"[ERROR] Failed to sync {plugin.name}: {e}")
+            log_callback(f"[ERROR] Failed to sync {plugin.name}: {e}")
 
-    print(f"\n>>> Sync Complete! {synced_count} new plugins bridged.")
+    log_callback(f"\n>>> Sync Complete! {synced_count} new plugins bridged.")
 
-def clean():
-    """Removes all bridged plugins from the Linux VST3 directory."""
-    print(">>> Cleaning Arthur bridged plugins...")
+def clean(log_callback=print):
+    """Removes all bridged plugins."""
+    log_callback(">>> Cleaning Arthur bridged plugins...")
     if not LINUX_VST3_DIR.exists():
-        print("Nothing to clean.")
+        log_callback("Nothing to clean.")
         return
 
     removed_count = 0
@@ -81,32 +82,67 @@ def clean():
                 item.unlink()
                 removed_count += 1
             except Exception as e:
-                print(f"[ERROR] Failed to remove {item.name}: {e}")
+                log_callback(f"[ERROR] Failed to remove {item.name}: {e}")
 
-    print(f">>> Clean Complete! Removed {removed_count} bridged plugins.")
+    log_callback(f">>> Clean Complete! Removed {removed_count} bridged plugins.")
 
-def status():
-    """Shows currently synced plugins."""
-    print(">>> Arthur Translation Layer Status\n")
-    print(f"Wine VST3 Path:  {WINE_VST3_DIR}")
-    print(f"Linux VST3 Path: {LINUX_VST3_DIR}\n")
+def run_gui():
+    """Simple Tkinter GUI for the Arthur Translation Layer."""
+    window = tk.Tk()
+    window.title("Arthur Translation Layer Manager")
+    window.geometry("600x450")
+
+    label = tk.Label(window, text="Arthur Translation Layer", font=("Arial", 16, "bold"))
+    label.pack(pady=10)
+
+    btn_frame = tk.Frame(window)
+    btn_frame.pack(pady=10)
+
+    log_area = scrolledtext.ScrolledText(window, width=70, height=15)
+    log_area.pack(pady=10, padx=10)
+
+    def log(msg):
+        log_area.insert(tk.END, msg + "\n")
+        log_area.see(tk.END)
+        window.update_idletasks()
+
+    def on_sync():
+        log_area.delete(1.0, tk.END)
+        sync(log)
     
-    if not LINUX_VST3_DIR.exists() or not any(LINUX_VST3_DIR.iterdir()):
-        print("No plugins are currently synced.")
-        return
+    def on_clean():
+        log_area.delete(1.0, tk.END)
+        clean(log)
 
-    print("Currently Synced Plugins:")
-    for item in LINUX_VST3_DIR.iterdir():
-        print(f"  - {item.name}")
+    def on_status():
+        log_area.delete(1.0, tk.END)
+        log(">>> Arthur Translation Layer Status\n")
+        log(f"Wine VST3 Path:  {WINE_VST3_DIR}")
+        log(f"Linux VST3 Path: {LINUX_VST3_DIR}\n")
+        if not LINUX_VST3_DIR.exists() or not any(LINUX_VST3_DIR.iterdir()):
+            log("No plugins are currently synced.")
+        else:
+            log("Currently Synced Plugins:")
+            for item in LINUX_VST3_DIR.iterdir():
+                log(f"  - {item.name}")
+
+    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=20, bg="#4CAF50", fg="white").grid(row=0, column=0, padx=5)
+    tk.Button(btn_frame, text="Show Status", command=on_status, width=15).grid(row=0, column=1, padx=5)
+    tk.Button(btn_frame, text="Clean All Links", command=on_clean, width=15, bg="#F44336", fg="white").grid(row=0, column=2, padx=5)
+
+    on_status()
+    window.mainloop()
 
 def main():
     parser = argparse.ArgumentParser(description="Arthur Translation Layer CLI Scanner")
-    parser.add_argument("command", choices=["sync", "clean", "resync", "status"], 
-                        help="Command to run (sync, clean, resync, status)")
+    parser.add_argument("command", nargs="?", choices=["sync", "clean", "resync", "status", "gui"], 
+                        default="gui", help="Command to run")
     
     args = parser.parse_args()
 
-    if args.command == "sync":
+    if args.command == "gui":
+        run_gui()
+    elif args.command == "sync":
         sync()
     elif args.command == "clean":
         clean()
@@ -114,7 +150,21 @@ def main():
         clean()
         sync()
     elif args.command == "status":
-        status()
+        status_terminal()
+
+def status_terminal():
+    print(">>> Arthur Translation Layer Status\n")
+    print(f"Wine VST3 Path:  {WINE_VST3_DIR}")
+    print(f"Linux VST3 Path: {LINUX_VST3_DIR}\n")
+    if not LINUX_VST3_DIR.exists() or not any(LINUX_VST3_DIR.iterdir()):
+        print("No plugins are currently synced.")
+    else:
+        print("Currently Synced Plugins:")
+        for item in LINUX_VST3_DIR.iterdir():
+            print(f"  - {item.name}")
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
