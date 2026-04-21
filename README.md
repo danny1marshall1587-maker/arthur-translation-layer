@@ -1,59 +1,64 @@
 # Arthur Translation Layer
+### The Final Hurdle for Linux Audio Production.
 
-A **Wayland-native VST3/ARA2 translation layer** for running Windows audio plugins on Linux, built on Wine 11 and the MIT-licensed VST3 SDK.
+Arthur is a **Wayland-native VST3/ARA2 translation layer** designed to make Linux a superior environment for professional audio production. By bridging Windows plugins with native performance and rock-solid stability, Arthur allows you to leave Windows behind without losing your essential tools.
 
-Arthur replaces legacy X11/XWayland bridging with direct Wayland subsurface attachment, eliminating the flickering, focus-stealing, and scaling bugs that plague existing solutions.
+---
 
-## Features
+## Why Arthur? (The "True Genius" of the Layer)
 
-- **Native Wayland windowing** — plugin GUIs attach directly as `wl_subsurface` children of your DAW window
-- **ARA2 path translation** — seamless Unix ↔ DOS file path conversion using Wine's internal APIs (no slow `winepath` shelling)
-- **Lock-free audio IPC** — zero-allocation, atomic ring buffer for sub-1ms latency between the Linux host and Wine plugin process
-- **One-click CLI scanner** — automatically discovers Windows VST3 plugins in your Wine prefix and creates bridge links
+For years, Linux audio was held back by clunky bridges, flickering GUIs, and broken ARA2 support. Arthur solves these pain points at the architectural level:
 
-## Quick Start
+### 🚀 Native DSP Performance
+Wine is **not an emulator**. Arthur executes your plugin's DSP code directly on your CPU at native speeds. By using our **Lock-Free Audio IPC (`AudioIPC.h`)**, audio data is shared via atomic ring buffers in shared memory, ensuring sub-1ms latency that rivals native Windows performance.
 
-### Download
+### 🖼️ Wayland-Native UI (Zero Flickering)
+Legacy bridges rely on X11/XWayland, which causes black boxes and GUI lag. Arthur binds Windows `HWND` surfaces directly to **native Wayland subsurfaces**. Your **FabFilter**, **Waves**, and **Softube** meters will be as smooth and responsive as they are on Windows.
 
-Grab the latest build from the [Releases](https://github.com/danny1marshall1587-maker/arthur-translation-layer/releases) page, or download the artifact from the latest [Actions](https://github.com/danny1marshall1587-maker/arthur-translation-layer/actions) run.
+### 🎹 Solving the "Problem Plugins"
+- **ARA2 Support (Melodyne/VocAlign):** Most bridges fail here. Arthur uses deep Wine C-API hooks to translate Unix ↔ DOS paths in real-time, making ARA2 plugins "just work."
+- **iLok & DRM:** Our bundled **Wine-GE** runtime is specifically patched to handle iLok, PACE, and Native Access, which typically crash standard Wine.
+- **Sandboxed Stability:** Every plugin runs in its own process. If a plugin crashes, it won't take down your DAW.
 
-### Install
+### 🐧 The Linux Advantage
+By moving to Linux with Arthur, you gain:
+- **PipeWire & JACK:** Superior, low-latency audio routing that Windows simply cannot match.
+- **Lightweight Core:** A stripped-down, high-performance OS that dedicates more CPU cycles to your music.
+- **Privacy & Control:** No forced updates or telemetry interrupting your session.
+
+---
+
+## One-Click Installation
+
+Arthur is now distributed as a self-contained **AppImage**. No compiling, no installing Wine, no terminal required.
+
+1.  **[Download the Latest AppImage](https://github.com/danny1marshall1587-maker/arthur-translation-layer/releases/latest)**.
+2.  Right-click -> **Properties** -> **Permissions** -> Check **"Allow executing file as program"**.
+3.  Double-click to open the **Arthur Manager**.
+4.  Click **"Scan & Sync Plugins"** and you're ready to produce.
+
+---
+
+## Quick Start (CLI)
+
+For power users who prefer the terminal:
 
 ```bash
-tar -xzf arthur-bridge-linux-x86_64.tar.gz
-cd arthur-bridge
+# Scan your Wine prefix and create bridge links
+./Arthur-x86_64.AppImage sync
 
-# Scan your Wine prefix for Windows VST3 plugins and create bridge links
-python3 arthur-cli.py sync
+# Check status
+./Arthur-x86_64.AppImage status
 ```
 
-### CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `python3 arthur-cli.py sync` | Scan Wine VST3 folder and create new bridge links |
-| `python3 arthur-cli.py status` | Show currently bridged plugins |
-| `python3 arthur-cli.py clean` | Remove all bridge links |
-| `python3 arthur-cli.py resync` | Clean + sync (full refresh) |
-
-### Build From Source
-
-```bash
-sudo apt install build-essential cmake libwayland-dev wayland-protocols pkg-config
-git clone https://github.com/danny1marshall1587-maker/arthur-translation-layer.git
-cd arthur-translation-layer
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-```
-
-The VST3 SDK is downloaded automatically during the CMake configure step.
+---
 
 ## Architecture
 
 ```
 ┌─────────────────┐         ┌──────────────────────┐
-│   Linux DAW     │         │  Wine 11 Process     │
-│  (Bitwig/Reaper)│         │                      │
+│   Linux Host    │         │  Wine-GE Process     │
+│ (Bitwig/Reaper) │         │                      │
 │                 │         │  ┌──────────────────┐ │
 │  wl_surface ────┼────┐    │  │ Windows VST3     │ │
 │                 │    │    │  │ Plugin (.dll)     │ │
