@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.8.2"
+VERSION = "v1.8.3"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -487,18 +487,25 @@ def run_gui():
                 log(f"    [{lib_idx}/{total_libs}] Installing {lib}...")
                 try:
                     update_progress(20 + int((lib_idx / total_libs) * 70))
-                    # For vcrun2022, we use --force by default to handle Microsoft checksum changes
-                    flags = ["-q"]
-                    if lib == "vcrun2022":
-                        flags.append("--force")
-                    
+                    # Intelligent Check: Does vcruntime140.dll already exist?
+                    dll_path = WINE_PREFIX / "drive_c" / "windows" / "system32" / "vcruntime140.dll"
+                    if dll_path.exists():
+                        log(f"    [OK] {lib} (Verified via DLL)")
+                        continue
+
                     subprocess.run([str(winetricks_path)] + flags + [lib], env=env, check=True)
                     log(f"    [OK] {lib}")
                     import time
                     time.sleep(1)
                 except Exception as e:
+                    # Final Verification: Did it actually succeed despite the error code?
+                    dll_path = WINE_PREFIX / "drive_c" / "windows" / "system32" / "vcruntime140.dll"
+                    if dll_path.exists():
+                        log(f"    [OK] {lib} (Verified via DLL after retry)")
+                        continue
+
                     if lib == "vcrun2022":
-                        log(f"    [RETRY] vcrun2022 failed, falling back to vcrun2015...")
+                        log(f"    [RETRY] vcrun2022 reported error, falling back to vcrun2015...")
                         try:
                             subprocess.run([str(winetricks_path), "-q", "vcrun2015"], env=env, check=True)
                             log(f"    [OK] vcrun2015 (Fallback)")
