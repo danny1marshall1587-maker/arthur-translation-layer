@@ -1,20 +1,15 @@
-.codersinflow
-.vscode
-node_modules
-.env
-.venv
-.codex
-out
-dist
-*.vsix
-.claude
-CLAUDE.md
-.DS_Store
-.git
-*.log
-*.tmp
-__pycache__
+# Build output
+build/
+*.so
+*.o
+
+# Ignore yabridge source since we just used it for reference
+yabridge/
+
+# Ignore python cache
+__pycache__/
 *.pyc
-.env.local
-.next
-.github
+
+# IDEs
+.vscode/
+.idea/

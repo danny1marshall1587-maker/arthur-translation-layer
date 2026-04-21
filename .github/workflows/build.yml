@@ -1,0 +1,41 @@
+name: Build Linux Binary
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols wine64-tools
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config Release -j$(nproc)
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: arthur-bridge-linux
+        path: ${{github.workspace}}/build/libarthur_bridge.so
+        
+    - name: Upload CLI Tool
+      uses: actions/upload-artifact@v4
+      with:
+        name: arthur-cli
+        path: ${{github.workspace}}/arthur-cli.py
