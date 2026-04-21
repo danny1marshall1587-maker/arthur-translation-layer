@@ -46,11 +46,9 @@ jobs:
         # Copy our tools (last to ensure we overwrite if needed)
         cp build/libarthur_bridge.so AppDir/usr/lib/
         cp arthur-cli.py AppDir/usr/bin/
+        cp arthur.png AppDir/
         cp AppRun AppDir/
         cp arthur.desktop AppDir/
-        
-        # Create a dummy icon
-        touch AppDir/arthur.png
 
     - name: Download AppImageTool
       run: |

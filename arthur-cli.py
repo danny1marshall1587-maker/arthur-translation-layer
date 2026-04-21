@@ -110,13 +110,20 @@ def install_desktop_entry():
             exec_cmd = f'{sys.executable} "{current_app}" gui'
             working_dir = os.path.dirname(current_app)
 
+        # Find the icon path
+        icon_path = os.path.join(os.path.dirname(current_app), "arthur.png")
+        if not os.path.exists(icon_path):
+            # Fallback for AppImage structure or missing file
+            icon_path = "applications-multimedia"
+
         content = f"""[Desktop Entry]
 Name=Arthur Manager
 Exec={exec_cmd}
 Path={working_dir}
-Icon=audio-x-generic
+Icon={icon_path}
 Type=Application
 Categories=AudioVideo;Audio;
+Keywords=Arthur;VST;Wine;Bridge;Translation;
 Comment=Arthur VST3 Translation Layer Manager
 Terminal=false
 StartupWMClass=arthur-manager
