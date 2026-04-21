@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.8.1"
+VERSION = "v1.8.2"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -465,38 +465,47 @@ def run_gui():
         lib_idx = 0
         
         log(f">>> Arthur is ready to install {total_libs} libraries.")
+        # Read winetricks.log to see what is already done
+        installed_libs = set()
+        log_path = WINE_PREFIX / "winetricks.log"
+        if log_path.exists():
+            try:
+                with open(log_path, "r") as f:
+                    installed_libs = set(line.strip() for line in f if line.strip())
+                log(f"    [INFO] Detected {len(installed_libs)} already installed libraries.")
+            except:
+                pass
+
         for group_name, libs in tasks:
             log(f">>> Processing {group_name}...")
             for lib in libs:
+                if lib in installed_libs:
+                    log(f"    [SKIP] {lib} is already installed.")
+                    continue
+
                 lib_idx += 1
                 log(f"    [{lib_idx}/{total_libs}] Installing {lib}...")
                 try:
                     update_progress(20 + int((lib_idx / total_libs) * 70))
-                    # Standard quiet install
-                    subprocess.run([str(winetricks_path), "-q", lib], env=env, check=True)
+                    # For vcrun2022, we use --force by default to handle Microsoft checksum changes
+                    flags = ["-q"]
+                    if lib == "vcrun2022":
+                        flags.append("--force")
+                    
+                    subprocess.run([str(winetricks_path)] + flags + [lib], env=env, check=True)
                     log(f"    [OK] {lib}")
                     import time
                     time.sleep(1)
                 except Exception as e:
-                    log(f"    [RETRY] Failed {lib}, attempting aggressive recovery...")
-                    try:
-                        # ONLY kill wineserver and clear cache if we actually hit a failure
-                        subprocess.run(["wineserver", "-k"], env=env, check=False, timeout=5)
-                        lib_cache = Path.home() / ".cache" / "winetricks" / lib
-                        if lib_cache.exists():
-                            import shutil
-                            shutil.rmtree(lib_cache, ignore_errors=True)
-                        
-                        # Attempt force install
-                        result = subprocess.run([str(winetricks_path), "-q", "--force", lib], env=env, check=False)
-                        if result.returncode == 0:
-                            log(f"    [OK] {lib} (Recovered)")
-                        else:
-                            log(f"    [FAIL] {lib} (Return Code: {result.returncode})")
-                        import time
-                        time.sleep(2)
-                    except Exception as retry_e:
-                        log(f"    [FAIL] {lib}: {retry_e}")
+                    if lib == "vcrun2022":
+                        log(f"    [RETRY] vcrun2022 failed, falling back to vcrun2015...")
+                        try:
+                            subprocess.run([str(winetricks_path), "-q", "vcrun2015"], env=env, check=True)
+                            log(f"    [OK] vcrun2015 (Fallback)")
+                        except:
+                            log(f"    [FAIL] vcrun2015 Fallback failed.")
+                    else:
+                        log(f"    [FAIL] {lib}: {e}")
                 
                 # Smooth progress update (from 20% to 95%)
                 update_progress(20 + int((lib_idx / total_libs) * 75))
