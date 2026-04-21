@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.7.1"
+VERSION = "v1.7.2"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -393,23 +393,27 @@ def run_gui():
         winetricks_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not winetricks_path.exists():
-            log("[1/3] Downloading winetricks...")
+            log(">>> [1/3] Downloading winetricks (One-time setup)...")
             try:
                 urllib.request.urlretrieve(WINETRICKS_URL, winetricks_path)
                 winetricks_path.chmod(0o755)
+                log("    [OK] Winetricks downloaded.")
             except Exception as e:
                 log(f"[ERROR] Failed to download winetricks: {e}")
                 return
         
         update_progress(20)
         
+        log(">>> [2/3] Cleaning up Wine environment locks...")
         # Kill any existing wine processes to prevent lock collisions
         try:
-            subprocess.run(["wineserver", "-k"], env=env, check=False)
+            subprocess.run(["wineserver", "-k"], env=env, check=False, timeout=5)
             import time
             time.sleep(2)
-        except:
-            pass
+        except Exception as e:
+            log(f"    [INFO] Wineserver cleanup: {e}")
+
+        log(">>> [3/3] Initializing Arthur Wine Prefix (This may take a minute)...")
 
         tasks = [
             ("Core Libraries", ["vcrun2022", "mfc42"]),
