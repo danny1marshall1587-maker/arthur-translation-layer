@@ -2,8 +2,14 @@
 
 #include <wayland-client.h>
 #include <atomic>
-#include <mutex>
+#include <cstdint>
+
+#ifdef __WINE__
 #include <windows.h>
+#else
+// Stub types for non-Wine builds (Linux-side bridge only)
+typedef void* HWND;
+#endif
 
 namespace arthur {
 

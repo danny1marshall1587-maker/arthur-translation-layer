@@ -73,6 +73,7 @@ bool WaylandPluginWindow::attach_hwnd(HWND plugin_hwnd) {
     // Position it at 0,0 relative to the DAW surface (or apply offset as needed)
     wl_subsurface_set_position(subsurface_, 0, 0);
 
+#ifdef __WINE__
     /* 
      * THE MAGIC WINE 11 WAYLAND HOOK:
      * In the new Wine Wayland driver, we map the HWND to the Wayland surface.
@@ -80,6 +81,7 @@ bool WaylandPluginWindow::attach_hwnd(HWND plugin_hwnd) {
      * to bind the DIB/Vulkan context of the HWND to `plugin_surface_`.
      */
     SetWindowPos(hwnd_, HWND_TOP, 0, 0, width_.load(), height_.load(), SWP_SHOWWINDOW);
+#endif
 
     // Commit changes to the parent
     wl_surface_commit(daw_surface_);
@@ -90,11 +92,13 @@ void WaylandPluginWindow::resize(int width, int height) {
     width_.store(width, std::memory_order_relaxed);
     height_.store(height, std::memory_order_relaxed);
 
+#ifdef __WINE__
     if (hwnd_) {
         // Trigger a Win32 resize message on the HWND. 
         // This runs asynchronously so it doesn't block the DAW.
         PostMessageA(hwnd_, WM_SIZE, SIZE_RESTORED, MAKELPARAM(width, height));
     }
+#endif
 }
 
 void WaylandPluginWindow::pump_events() {

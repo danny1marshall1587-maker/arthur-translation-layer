@@ -3,8 +3,9 @@ build/
 *.so
 *.o
 
-# Ignore yabridge source since we just used it for reference
+# Ignore cloned reference repos (not needed for build - CMake fetches VST3 SDK)
 yabridge/
+vst3sdk/
 
 # Ignore python cache
 __pycache__/
@@ -13,3 +14,6 @@ __pycache__/
 # IDEs
 .vscode/
 .idea/
+
+# Release packaging
+release/

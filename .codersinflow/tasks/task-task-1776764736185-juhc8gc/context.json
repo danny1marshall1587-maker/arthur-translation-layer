@@ -1,4 +1,21 @@
 {
   "mode_id": "code_mode",
-  "profile_id": "default"
+  "profile_id": "default",
+  "tokenTracking": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "cachedInputTokens": 0,
+    "totalCost": 0,
+    "conversationHistory": [],
+    "maxInputTokens": 200000,
+    "maxOutputTokens": 32000,
+    "inputTokenPricePerMillion": 0,
+    "outputTokenPricePerMillion": 0,
+    "currentInputContextSize": 0,
+    "currentOutputContextSize": 0,
+    "modelId": "claude-code-auto",
+    "providerName": "claude-code"
+  },
+  "systemPromptTokenSize": 0
 }
