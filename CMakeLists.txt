@@ -9,46 +9,54 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND REQUIRED wayland-client)
 
-# --- VST3 SDK Integration ---
-# If not present locally, download during configure
-set(VST3SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vst3sdk")
-if(NOT EXISTS "${VST3SDK_DIR}/pluginterfaces/CMakeLists.txt")
-    message(STATUS "VST3 SDK not found locally. Downloading via FetchContent...")
-    include(FetchContent)
-    FetchContent_Declare(
-        vst3sdk
-        GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
-        GIT_TAG        master
-        GIT_SHALLOW    TRUE
-        SOURCE_DIR     "${VST3SDK_DIR}"
-    )
-    FetchContent_MakeAvailable(vst3sdk)
-endif()
+# --- VST3 SDK: Only fetch pluginterfaces (header-only, no GUI/X11 deps) ---
+# We download into a directory structure that matches the expected include layout:
+#   <prefix>/pluginterfaces/vst/...
+include(FetchContent)
 
-# Only build pluginterfaces (the header-only interface definitions)
-if(EXISTS "${VST3SDK_DIR}/pluginterfaces/CMakeLists.txt")
-    add_subdirectory("${VST3SDK_DIR}/pluginterfaces" "${CMAKE_BINARY_DIR}/pluginterfaces")
-endif()
+set(FETCHCONTENT_BASE_DIR "${CMAKE_BINARY_DIR}/_vst3_deps")
 
-# Define the shared library that acts as our translation layer bridge
+FetchContent_Declare(
+    vst3_pluginterfaces
+    GIT_REPOSITORY https://github.com/steinbergmedia/vst3_pluginterfaces.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    SOURCE_DIR     "${CMAKE_BINARY_DIR}/_vst3_headers/pluginterfaces"
+)
+
+FetchContent_Declare(
+    vst3_base
+    GIT_REPOSITORY https://github.com/steinbergmedia/vst3_base.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    SOURCE_DIR     "${CMAKE_BINARY_DIR}/_vst3_headers/base"
+)
+
+FetchContent_MakeAvailable(vst3_pluginterfaces vst3_base)
+
+# Define the shared library
 add_library(arthur_bridge SHARED
     AraPathTranslator.cpp
     WaylandPluginWindow.cpp
     main.cpp
 )
 
-# VST3 SDK headers
-target_link_libraries(arthur_bridge PRIVATE pluginterfaces)
-target_include_directories(arthur_bridge PRIVATE "${VST3SDK_DIR}")
-
-# Wayland headers and libraries
-target_include_directories(arthur_bridge PRIVATE ${WAYLAND_INCLUDE_DIRS})
-target_link_libraries(arthur_bridge PRIVATE 
-    ${WAYLAND_LIBRARIES}
-    rt      # Required for shared memory IPC (shm_open, mmap)
+# VST3 headers: point to the parent so #include <pluginterfaces/vst/...> resolves
+target_include_directories(arthur_bridge PRIVATE
+    "${CMAKE_BINARY_DIR}/_vst3_headers"
 )
 
-# If compiling with Winelib, link against libwine
+# Wayland
+target_include_directories(arthur_bridge PRIVATE ${WAYLAND_INCLUDE_DIRS})
+target_link_libraries(arthur_bridge PRIVATE
+    ${WAYLAND_LIBRARIES}
+    rt
+)
+
+# Suppress deprecation warnings from VST3 SDK headers
+target_compile_options(arthur_bridge PRIVATE -Wno-deprecated-declarations)
+
+# Wine (only when building as Winelib)
 if(DEFINED ENV{WINEBUILD})
     target_link_libraries(arthur_bridge PRIVATE wine)
     target_compile_definitions(arthur_bridge PRIVATE __WINE__)
