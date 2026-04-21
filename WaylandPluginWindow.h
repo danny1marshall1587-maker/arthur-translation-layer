@@ -43,6 +43,10 @@ public:
      */
     void pump_events();
 
+    // Wayland Registry listeners
+    static void registry_handler(void* data, wl_registry* registry, uint32_t id, const char* interface, uint32_t version);
+    static void registry_remover(void* data, wl_registry* registry, uint32_t id);
+
 private:
     wl_display* display_ = nullptr;
     wl_registry* registry_ = nullptr;
@@ -57,10 +61,6 @@ private:
 
     std::atomic<int> width_{0};
     std::atomic<int> height_{0};
-
-    // Wayland Registry listeners
-    static void registry_handler(void* data, wl_registry* registry, uint32_t id, const char* interface, uint32_t version);
-    static void registry_remover(void* data, wl_registry* registry, uint32_t id);
 };
 
 } // namespace arthur
