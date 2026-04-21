@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.7.6"
+VERSION = "v1.7.7"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -413,11 +413,17 @@ def run_gui():
         except Exception as e:
             log(f"    [INFO] Wineserver cleanup: {e}")
 
-        log(">>> [3/3] Initializing Arthur Wine Prefix (This may take a minute)...")
-        # Force a manual boot to build the prefix core before winetricks touches it
+        log(">>> [3/3] Initializing Arthur Wine Prefix (Wine 10.0+ Mode)...")
+        # Force a manual boot with Mono/Gecko disabled to prevent hidden dialog hangs
         try:
-            # Set WINE env var so winetricks uses the same wine version
+            # Set explicit binary paths for winetricks compatibility
             env["WINE"] = WINE_CMD
+            env["WINE_BIN"] = WINE_CMD
+            env["WINESERVER_BIN"] = "wineserver"
+            # Bypass Mono/Gecko installers during prefix creation
+            env["WINEDLLOVERRIDES"] = "mscoree=d;mshtml=d"
+            
+            log(f"    [INFO] Using binary: {WINE_CMD}")
             subprocess.run([WINE_CMD, "wineboot", "-u"], env=env, check=False, timeout=60)
             import time
             time.sleep(5)
