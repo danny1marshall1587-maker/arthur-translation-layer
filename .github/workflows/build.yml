@@ -17,42 +17,69 @@ jobs:
 
     - name: Install Build Dependencies
       run: |
+        sudo dpkg --add-architecture i386
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk
 
-    - name: Install Wine (for bundling)
+    - name: Install Wine (for Guest cross-compilation)
       run: |
-        sudo dpkg --add-architecture i386
+        sudo mkdir -pm755 /etc/apt/keyrings
+        sudo wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key
+        sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/$(lsb_release -cs)/winehq-$(lsb_release -cs).sources
         sudo apt-get update
-        sudo apt-get install -y --install-recommends wine64 wine32
+        sudo apt-get install -y --install-recommends winehq-stable || sudo apt-get install -y wine64 wine32 wine64-tools
 
-    - name: Configure & Build Bridge
+    - name: Configure & Build Bridge (Linux side)
       run: |
         cmake -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build --config Release -j$(nproc)
 
+    - name: Build Guest (Wine side)
+      run: |
+        # wineg++ compiles the Wine-side Guest executable
+        WINEGPP=$(which wineg++ 2>/dev/null || echo "")
+        if [ -z "$WINEGPP" ]; then
+          echo "::warning::wineg++ not found, skipping Guest build"
+          exit 0
+        fi
+        
+        VST3_HEADERS="build/_vst3_headers"
+        
+        $WINEGPP -std=c++20 \
+          -I"$VST3_HEADERS" \
+          -I"." \
+          -Wno-deprecated-declarations \
+          -o build/arthur-guest.exe \
+          guest.cpp \
+          ipc/control-protocol.cpp
+        
+        echo "Guest built successfully"
+        ls -la build/arthur-guest.exe*
+
     - name: Setup AppDir & Download Portable Wine
       run: |
         mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/lib
+        mkdir -p AppDir/usr/lib/arthur
         
-        # Download Portable Wine (Wine-GE is perfect for this)
-        wget https://github.com/GloriousEggroll/wine-ge-custom/releases/download/GE-Proton8-26/wine-lutris-GE-Proton8-26-x86_64.tar.xz
+        # Download Portable Wine (Wine-GE for pro-audio compatibility)
+        wget -q https://github.com/GloriousEggroll/wine-ge-custom/releases/download/GE-Proton8-26/wine-lutris-GE-Proton8-26-x86_64.tar.xz
         tar -xf wine-lutris-GE-Proton8-26-x86_64.tar.xz
         
         # Merge Wine files into AppDir/usr
         cp -r lutris-GE-Proton8-26-x86_64/* AppDir/usr/
         
-        # Copy our tools (last to ensure we overwrite if needed)
-        cp build/libarthur_bridge.so AppDir/usr/lib/
+        # Copy Arthur components
+        cp build/libarthur_bridge.so AppDir/usr/lib/arthur/
+        [ -f build/arthur-guest.exe ] && cp build/arthur-guest.exe AppDir/usr/lib/arthur/
+        [ -f build/arthur-guest.exe.so ] && cp build/arthur-guest.exe.so AppDir/usr/lib/arthur/
         cp arthur-cli.py AppDir/usr/bin/
         cp arthur.png AppDir/
         cp AppRun AppDir/
-        cp arthur.desktop AppDir/
+        cp arthur.desktop AppDir/ 2>/dev/null || true
 
     - name: Download AppImageTool
       run: |
-        wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
         chmod +x appimagetool-x86_64.AppImage
 
     - name: Build AppImage

@@ -19,3 +19,22 @@ __pycache__/
 
 # Release packaging
 release/
+.codersinflow
+.vscode
+node_modules
+.env
+.venv
+.codex
+out
+dist
+*.vsix
+.claude
+CLAUDE.md
+.DS_Store
+.git
+*.log
+*.tmp
+__pycache__
+.env.local
+.next
+.github
