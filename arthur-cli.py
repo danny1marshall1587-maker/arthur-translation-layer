@@ -98,16 +98,19 @@ def install_desktop_entry():
     try:
         DESKTOP_ENTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
         # Use the current running file (AppImage or script) as the target
+        # Use the current running file (AppImage or script) as the target
         current_app = os.environ.get('APPIMAGE', os.path.abspath(sys.argv[0]))
-        
-        # Add the no-fuse flag if we are running as an AppImage
-        args = ""
+
+        # Construct the execution command
         if os.environ.get('APPIMAGE'):
-            args = "--appimage-extract-and-run"
+            exec_cmd = f'"{current_app}" --appimage-extract-and-run gui'
+        else:
+            # For development mode (running the .py script)
+            exec_cmd = f'{sys.executable} "{current_app}" gui'
 
         content = f"""[Desktop Entry]
 Name=Arthur Manager
-Exec="{current_app}" {args}
+Exec={exec_cmd}
 Icon=audio-x-generic
 Type=Application
 Categories=AudioVideo;Audio;
