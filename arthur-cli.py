@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.9"
+VERSION = "v1.5.0"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -248,12 +248,15 @@ def run_gui():
     def install_worker(file_paths):
         log(f">>> Batch Installation Started: {len(file_paths)} installers queued.")
         total = len(file_paths)
+        env = os.environ.copy()
+        env["WINEPREFIX"] = str(WINE_PREFIX)
+        
         for i, file_path in enumerate(file_paths):
             log(f"\n[{i+1}/{total}] Installing: {os.path.basename(file_path)}")
             update_progress((i / total) * 100)
             try:
-                process = subprocess.Popen([WINE_CMD, file_path])
-                process.wait()
+                # Use sequential wait to prevent UI locking and ensure one installer at a time
+                subprocess.run([WINE_CMD, file_path], env=env, check=False)
                 log(f"[SUCCESS] Finished installer: {os.path.basename(file_path)}")
             except Exception as e:
                 log(f"[ERROR] Failed during installation of {file_path}: {e}")
@@ -273,6 +276,14 @@ def run_gui():
     def prep_worker():
         log(">>> PREPARING WINE FOR PRO AUDIO...")
         update_progress(5)
+        
+        # Setup robust environment for winetricks
+        env = os.environ.copy()
+        env["WINEPREFIX"] = str(WINE_PREFIX)
+        safe_tmp = Path.home() / ".cache" / "arthur" / "run"
+        safe_tmp.mkdir(parents=True, exist_ok=True)
+        env["TMPDIR"] = str(safe_tmp)
+        
         winetricks_path = Path.home() / ".cache" / "arthur" / "winetricks"
         winetricks_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -286,22 +297,27 @@ def run_gui():
                 return
         
         update_progress(20)
-        log("[2/3] Installing core libraries (vcrun2015, d3dcompiler_47, corefonts)...")
-        try:
-            subprocess.run([str(winetricks_path), "-q", "vcrun2015", "d3dcompiler_47", "corefonts"], check=True)
-            log("[SUCCESS] Core libraries installed.")
-        except Exception as e:
-            log(f"[ERROR] Failed to install core libraries: {e}")
+        # Sequential winetricks calls for maximum reliability
+        tasks = [
+            ("Core Libraries (vcrun2015)", ["vcrun2015"]),
+            ("Graphics Support (d3dcompiler_47)", ["d3dcompiler_47"]),
+            ("Essential Fonts (corefonts)", ["corefonts"]),
+            ("Vulkan Graphics (dxvk)", ["dxvk"])
+        ]
+        
+        for i, (name, args) in enumerate(tasks):
+            log(f"[{i+2}/5] Installing {name}...")
+            try:
+                subprocess.run([str(winetricks_path), "-q"] + args, env=env, check=True)
+                log(f"    [OK] {name}")
+            except Exception as e:
+                log(f"    [RETRY] Sequential installation failed for {name}, trying isolated mode...")
+                try:
+                    subprocess.run([str(winetricks_path), "-q"] + args, env=env, check=False)
+                except:
+                    log(f"    [FAIL] {name}: {e}")
+            update_progress(20 + (i + 1) * 20)
 
-        update_progress(60)
-        log("[3/3] Installing DXVK (Vulkan Graphics)...")
-        try:
-            subprocess.run([str(winetricks_path), "-q", "dxvk"], check=True)
-            log("[SUCCESS] DXVK enabled.")
-        except Exception as e:
-            log(f"[ERROR] Failed to enable DXVK: {e}")
-
-        update_progress(100)
         log("\n>>> WINE ENVIRONMENT IS NOW PRO-READY.")
 
     def on_prepare():
