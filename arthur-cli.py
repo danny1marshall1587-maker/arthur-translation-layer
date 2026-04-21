@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.7.2"
+VERSION = "v1.7.4"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -436,6 +436,18 @@ def run_gui():
         for group_name, libs in tasks:
             log(f">>> Processing {group_name}...")
             for lib in libs:
+                # BREAK THE DEADLOCK: Kill wineserver before EVERY library to ensure a fresh lock
+                try:
+                    subprocess.run(["wineserver", "-k"], env=env, check=False, timeout=5)
+                    # Clear any stale winetricks locks
+                    lock_file = WINE_PREFIX / "winetricks.lock"
+                    if lock_file.exists():
+                        lock_file.unlink()
+                    import time
+                    time.sleep(4)
+                except:
+                    pass
+
                 lib_idx += 1
                 log(f"    [{lib_idx}/{total_libs}] Installing {lib}...")
                 try:
