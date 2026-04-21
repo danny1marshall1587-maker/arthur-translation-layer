@@ -4,8 +4,9 @@ import os
 import sys
 import shutil
 import argparse
+import subprocess
 import tkinter as tk
-from tkinter import messagebox, scrolledtext
+from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
 
 # Detect AppImage environment
@@ -19,8 +20,10 @@ LINUX_VST3_DIR = Path.home() / ".vst3" / "Arthur"
 # Path to the bridge library
 if APPDIR:
     BRIDGE_SO_PATH = Path(APPDIR) / "usr" / "lib" / "libarthur_bridge.so"
+    WINE_CMD = "wine" # Should be in PATH via AppRun
 else:
     BRIDGE_SO_PATH = Path.cwd() / "build" / "libarthur_bridge.so"
+    WINE_CMD = "wine"
 
 def setup_directories():
     """Ensure the target Linux VST3 directory exists."""
@@ -49,7 +52,7 @@ def sync(log_callback=print):
     plugins = find_wine_plugins()
 
     if not plugins:
-        log_callback("No plugins found to sync.")
+        log_callback("No plugins found to sync. Try installing some first!")
         return
 
     synced_count = 0
@@ -90,7 +93,7 @@ def run_gui():
     """Simple Tkinter GUI for the Arthur Translation Layer."""
     window = tk.Tk()
     window.title("Arthur Translation Layer Manager")
-    window.geometry("600x450")
+    window.geometry("700x500")
 
     label = tk.Label(window, text="Arthur Translation Layer", font=("Arial", 16, "bold"))
     label.pack(pady=10)
@@ -98,7 +101,7 @@ def run_gui():
     btn_frame = tk.Frame(window)
     btn_frame.pack(pady=10)
 
-    log_area = scrolledtext.ScrolledText(window, width=70, height=15)
+    log_area = scrolledtext.ScrolledText(window, width=80, height=15)
     log_area.pack(pady=10, padx=10)
 
     def log(msg):
@@ -114,6 +117,21 @@ def run_gui():
         log_area.delete(1.0, tk.END)
         clean(log)
 
+    def on_install():
+        file_path = filedialog.askopenfilename(
+            title="Select Windows Installer",
+            filetypes=[("Installers", "*.exe *.msi"), ("All files", "*.*")]
+        )
+        if file_path:
+            log(f">>> Running Installer: {file_path}")
+            try:
+                # Run the installer using the bundled wine
+                subprocess.Popen([WINE_CMD, file_path])
+                log("[INFO] Installer started. Please follow the instructions in the installer window.")
+                log("[TIP] After installation, click 'Scan & Sync Plugins' to bridge the new plugin.")
+            except Exception as e:
+                log(f"[ERROR] Failed to start installer: {e}")
+
     def on_status():
         log_area.delete(1.0, tk.END)
         log(">>> Arthur Translation Layer Status\n")
@@ -126,9 +144,10 @@ def run_gui():
             for item in LINUX_VST3_DIR.iterdir():
                 log(f"  - {item.name}")
 
-    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=20, bg="#4CAF50", fg="white").grid(row=0, column=0, padx=5)
-    tk.Button(btn_frame, text="Show Status", command=on_status, width=15).grid(row=0, column=1, padx=5)
-    tk.Button(btn_frame, text="Clean All Links", command=on_clean, width=15, bg="#F44336", fg="white").grid(row=0, column=2, padx=5)
+    tk.Button(btn_frame, text="Install New Plugin (.exe)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=0, padx=5)
+    tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=22, bg="#4CAF50", fg="white").grid(row=0, column=1, padx=5)
+    tk.Button(btn_frame, text="Show Status", command=on_status, width=15).grid(row=0, column=2, padx=5)
+    tk.Button(btn_frame, text="Clean All", command=on_clean, width=15, bg="#F44336", fg="white").grid(row=0, column=3, padx=5)
 
     on_status()
     window.mainloop()
