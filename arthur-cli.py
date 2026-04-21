@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.1"
+VERSION = "v1.4.3"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -59,9 +59,14 @@ def install_desktop_entry():
         # Use the current running file (AppImage or script) as the target
         current_app = os.environ.get('APPIMAGE', os.path.abspath(sys.argv[0]))
         
+        # Add the no-fuse flag if we are running as an AppImage
+        exec_cmd = current_app
+        if os.environ.get('APPIMAGE'):
+            exec_cmd = f"{current_app} --appimage-extract-and-run"
+
         content = f"""[Desktop Entry]
 Name=Arthur Manager
-Exec={current_app}
+Exec={exec_cmd}
 Icon=audio-x-generic
 Type=Application
 Categories=AudioVideo;Audio;
