@@ -18,8 +18,42 @@ APPDIR = os.environ.get('APPDIR')
 OWNDIR = Path(os.environ.get('APPIMAGE', sys.argv[0])).parent
 
 # Defaults
-DEFAULT_WINE_PREFIX = Path.home() / ".wine"
-WINE_VST3_DIR = DEFAULT_WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST3"
+WINE_PREFIX = Path.home() / ".arthur-wine"
+# Fallback to standard .wine if arthur-wine doesn't exist
+if not WINE_PREFIX.exists():
+    WINE_PREFIX = Path.home() / ".wine"
+
+WINE_VST3_LOCATIONS = [
+    # Standard 64-bit and 32-bit VST3 Locations
+    WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST3",
+    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "Common Files" / "VST3",
+    
+    # User-Specific AppData (Common for "Just Me" installs)
+    WINE_PREFIX / "drive_c" / "users" / os.getlogin() / "AppData" / "Roaming" / "Common Files" / "VST3",
+    WINE_PREFIX / "drive_c" / "users" / "Public" / "Documents" / "VST3",
+
+    # Steinberg & Standard VST2/VST3 Alternates
+    WINE_PREFIX / "drive_c" / "Program Files" / "Steinberg" / "VSTPlugins",
+    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "Steinberg" / "VSTPlugins",
+    WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "Steinberg" / "VST2",
+    
+    # Generic & Legacy VST Locations
+    WINE_PREFIX / "drive_c" / "Program Files" / "VSTPlugins",
+    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "VSTPlugins",
+    WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST2",
+    WINE_PREFIX / "drive_c" / "VSTPlugins",
+    WINE_PREFIX / "drive_c" / "VST",
+    
+    # Vendor Specific (Waves, NI, etc.)
+    WINE_PREFIX / "drive_c" / "Program Files" / "Native Instruments" / "VSTPlugins 64 bit",
+    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "Waves" / "Plug-Ins V15",
+
+    # Standard .wine Fallback Sweep
+    Path.home() / ".wine" / "drive_c" / "Program Files" / "Common Files" / "VST3",
+    Path.home() / ".wine" / "drive_c" / "Program Files" / "VSTPlugins",
+    Path.home() / ".wine" / "drive_c" / "users" / os.getlogin() / "AppData" / "Roaming" / "Common Files" / "VST3"
+]
+
 LINUX_VST3_DIR = Path.home() / ".vst3" / "Arthur"
 WINETRICKS_URL = "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks"
 GITHUB_API_URL = "https://api.github.com/repos/danny1marshall1587-maker/arthur-translation-layer/releases/latest"
@@ -33,7 +67,7 @@ if APPDIR:
     BRIDGE_SO_PATH = Path(APPDIR) / "usr" / "lib" / "libarthur_bridge.so"
     WINE_CMD = "wine" 
 else:
-    BRIDGE_SO_PATH = Path.cwd() / "build" / "libarthur_bridge.so"
+    BRIDGE_SO_PATH = Path(__file__).parent / "build" / "libarthur_bridge.so"
     WINE_CMD = "wine"
 
 def setup_directories():
@@ -42,14 +76,21 @@ def setup_directories():
     INSTALL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 def find_wine_plugins():
-    """Scans the Wine VST3 directory for plugin folders/files."""
-    if not WINE_VST3_DIR.exists():
-        return []
-
+    """Scans multiple Wine VST3 directories recursively for plugin folders/files."""
     plugins = []
-    for item in WINE_VST3_DIR.iterdir():
-        if item.suffix.lower() == '.vst3':
-            plugins.append(item)
+    seen_paths = set()
+    
+    for directory in WINE_VST3_LOCATIONS:
+        if not directory.exists():
+            continue
+            
+        # Recursive glob to find .vst3 bundles in subfolders
+        for item in directory.rglob('*.vst3'):
+            # Resolve to absolute path to handle symlinks and duplicates
+            abs_path = item.resolve()
+            if abs_path not in seen_paths:
+                plugins.append(item)
+                seen_paths.add(abs_path)
     return plugins
 
 def install_desktop_entry():
@@ -97,17 +138,24 @@ def sync(log_callback=print):
 
     synced_count = 0
     for plugin in plugins:
-        target_link = LINUX_VST3_DIR / plugin.name
-        if target_link.exists():
+        # Create a proper VST3 bundle structure: PluginName.vst3/Contents/x86_64-linux/
+        bundle_dir = LINUX_VST3_DIR / plugin.name
+        binary_dir = bundle_dir / "Contents" / "x86_64-linux"
+        
+        if bundle_dir.exists():
             log_callback(f"[-] Skipping (already exists): {plugin.name}")
             continue
 
         try:
+            binary_dir.mkdir(parents=True, exist_ok=True)
+            # The binary inside the bundle must have a .so suffix or the same name as the bundle
+            target_link = binary_dir / (plugin.stem + ".so")
             os.symlink(BRIDGE_SO_PATH, target_link)
-            log_callback(f"[+] Synced: {plugin.name}")
+            
+            log_callback(f"[+] Synced Bundle: {plugin.name}")
             synced_count += 1
         except Exception as e:
-            log_callback(f"[ERROR] Failed to sync {plugin.name}: {e}")
+            log_callback(f"[ERROR] Failed to bridge {plugin.name}: {e}")
 
     log_callback(f"\n>>> Sync Complete! {synced_count} new plugins bridged.")
 
@@ -120,12 +168,14 @@ def clean(log_callback=print):
 
     removed_count = 0
     for item in LINUX_VST3_DIR.iterdir():
-        if item.is_symlink() or item.is_file():
-            try:
+        try:
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
                 item.unlink()
-                removed_count += 1
-            except Exception as e:
-                log_callback(f"[ERROR] Failed to remove {item.name}: {e}")
+            removed_count += 1
+        except Exception as e:
+            log_callback(f"[ERROR] Failed to remove {item.name}: {e}")
 
     log_callback(f">>> Clean Complete! Removed {removed_count} bridged plugins.")
 
@@ -288,8 +338,13 @@ def run_gui():
             log(f"\n[{i+1}/{total}] Installing: {os.path.basename(file_path)}")
             update_progress((i / total) * 100)
             try:
-                # Use sequential wait to prevent UI locking and ensure one installer at a time
-                subprocess.run([WINE_CMD, file_path], env=env, check=False)
+                # Use msiexec for .msi files, direct wine for .exe
+                if file_path.lower().endswith(".msi"):
+                    cmd = [WINE_CMD, "msiexec", "/i", file_path]
+                else:
+                    cmd = [WINE_CMD, file_path]
+                
+                subprocess.run(cmd, env=env, check=False)
                 log(f"[SUCCESS] Finished installer: {os.path.basename(file_path)}")
             except Exception as e:
                 log(f"[ERROR] Failed during installation of {file_path}: {e}")
@@ -332,7 +387,8 @@ def run_gui():
         update_progress(20)
         # Sequential winetricks calls for maximum reliability
         tasks = [
-            ("Core Libraries (vcrun2015)", ["vcrun2015"]),
+            ("Core Libraries (vcrun2015, mfc42)", ["vcrun2015", "mfc42"]),
+            ("UI Support (msxml6, riched20, comctl32)", ["msxml6", "riched20", "comctl32"]),
             ("Graphics Support (d3dcompiler_47)", ["d3dcompiler_47"]),
             ("Essential Fonts (corefonts)", ["corefonts"]),
             ("Vulkan Graphics (dxvk)", ["dxvk"])
@@ -361,14 +417,18 @@ def run_gui():
     def on_status():
         log_area.delete(1.0, tk.END)
         log(">>> Arthur Translation Layer Status\n")
-        log(f"Wine VST3 Path:  {WINE_VST3_DIR}")
-        log(f"Linux VST3 Path: {LINUX_VST3_DIR}\n")
-        if not LINUX_VST3_DIR.exists() or not any(LINUX_VST3_DIR.iterdir()):
-            log("No plugins are currently synced.")
+        log(f"Active Wine Prefix: {WINE_PREFIX}")
+        log(f"Linux VST3 Path:    {LINUX_VST3_DIR}\n")
+        
+        plugins = find_wine_plugins()
+        if not plugins:
+            log("No plugins detected in Wine folders.")
+            log("Checked:")
+            for loc in WINE_VST3_LOCATIONS: log(f"  - {loc}")
         else:
-            log("Currently Synced Plugins:")
-            for item in LINUX_VST3_DIR.iterdir():
-                log(f"  - {item.name}")
+            log("Detected Windows Plugins:")
+            for p in plugins:
+                log(f"  - {p.name}")
 
     tk.Button(btn_frame, text="Prepare Wine for Pro Audio", command=on_prepare, width=22, bg="#FF9800", fg="white").grid(row=0, column=0, padx=5)
     tk.Button(btn_frame, text="Install Windows Plugins (.exe)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=1, padx=5)
