@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.8.0"
+VERSION = "v1.8.1"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -468,48 +468,33 @@ def run_gui():
         for group_name, libs in tasks:
             log(f">>> Processing {group_name}...")
             for lib in libs:
-                # BREAK THE DEADLOCK: Kill wineserver before EVERY library to ensure a fresh lock
-                try:
-                    log("    [CLEANUP] Clearing Wine locks...")
-                    result = subprocess.run(["wineserver", "-k"], env=env, check=False, timeout=8)
-                    if result.returncode != 0 and lib_idx > 0:
-                        log("    [TIP] Persistent lock detected. If this hangs, a system restart may be required.")
-                    
-                    # Clear any stale winetricks locks
-                    lock_file = WINE_PREFIX / "winetricks.lock"
-                    if lock_file.exists():
-                        lock_file.unlink()
-                    import time
-                    time.sleep(5)
-                except Exception as e:
-                    log(f"    [INFO] Cleanup delay: {e}")
-
                 lib_idx += 1
                 log(f"    [{lib_idx}/{total_libs}] Installing {lib}...")
                 try:
-                    # Strictly sequential: one-by-one
+                    update_progress(20 + int((lib_idx / total_libs) * 70))
+                    # Standard quiet install
                     subprocess.run([str(winetricks_path), "-q", lib], env=env, check=True)
-                    # Let the prefix settle to prevent lock issues
-                    import time
-                    time.sleep(3)
                     log(f"    [OK] {lib}")
+                    import time
+                    time.sleep(1)
                 except Exception as e:
-                    log(f"    [RETRY] Failed {lib}, clearing cache and attempting force...")
+                    log(f"    [RETRY] Failed {lib}, attempting aggressive recovery...")
                     try:
-                        # Clear winetricks cache for this specific library to fix corrupted downloads
+                        # ONLY kill wineserver and clear cache if we actually hit a failure
+                        subprocess.run(["wineserver", "-k"], env=env, check=False, timeout=5)
                         lib_cache = Path.home() / ".cache" / "winetricks" / lib
                         if lib_cache.exists():
                             import shutil
                             shutil.rmtree(lib_cache, ignore_errors=True)
                         
-                        # Attempt force and check the result
+                        # Attempt force install
                         result = subprocess.run([str(winetricks_path), "-q", "--force", lib], env=env, check=False)
                         if result.returncode == 0:
-                            log(f"    [OK] {lib} (Forced)")
+                            log(f"    [OK] {lib} (Recovered)")
                         else:
                             log(f"    [FAIL] {lib} (Return Code: {result.returncode})")
                         import time
-                        time.sleep(3)
+                        time.sleep(2)
                     except Exception as retry_e:
                         log(f"    [FAIL] {lib}: {retry_e}")
                 
