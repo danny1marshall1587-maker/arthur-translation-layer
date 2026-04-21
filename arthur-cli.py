@@ -412,12 +412,18 @@ def run_gui():
             pass
 
         tasks = [
-            ("Core Libraries", ["vcrun2015", "mfc42"]),
+            ("Core Libraries", ["vcrun2022", "mfc42"]),
             ("UI Support", ["msxml6", "riched20", "comctl32"]),
             ("Graphics Support", ["d3dcompiler_47"]),
             ("Essential Fonts", ["corefonts"]),
             ("Vulkan Graphics", ["dxvk"])
         ]
+        
+        # Check for system dependencies needed by winetricks
+        for tool in ["cabextract", "unzip"]:
+            if not shutil.which(tool):
+                log(f"[WARNING] Missing '{tool}'! Some libraries might fail to install.")
+                log(f"    -> Please run: sudo apt install {tool}")
         
         # Calculate total individual libraries for smooth progress
         total_libs = sum(len(libs) for _, libs in tasks)
@@ -436,8 +442,14 @@ def run_gui():
                     time.sleep(3)
                     log(f"    [OK] {lib}")
                 except Exception as e:
-                    log(f"    [RETRY] Failed {lib}, attempting force...")
+                    log(f"    [RETRY] Failed {lib}, clearing cache and attempting force...")
                     try:
+                        # Clear winetricks cache for this specific library to fix corrupted downloads
+                        lib_cache = Path.home() / ".cache" / "winetricks" / lib
+                        if lib_cache.exists():
+                            import shutil
+                            shutil.rmtree(lib_cache, ignore_errors=True)
+                        
                         # Attempt force and check the result
                         result = subprocess.run([str(winetricks_path), "-q", "--force", lib], env=env, check=False)
                         if result.returncode == 0:
