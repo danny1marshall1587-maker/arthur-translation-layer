@@ -16,6 +16,7 @@ Wine is **not an emulator**. Arthur executes your plugin's DSP code directly on 
 Legacy bridges rely on X11/XWayland, which causes black boxes and GUI lag. Arthur binds Windows `HWND` surfaces directly to **native Wayland subsurfaces**. Your **FabFilter**, **Waves**, and **Softube** meters will be as smooth and responsive as they are on Windows.
 
 ### 🎹 Solving the "Problem Plugins"
+- **Batch Installation:** Select multiple `.exe` or `.msi` files at once. Arthur will queue them up and install them one-by-one in the background.
 - **ARA2 Support (Melodyne/VocAlign):** Most bridges fail here. Arthur uses deep Wine C-API hooks to translate Unix ↔ DOS paths in real-time, making ARA2 plugins "just work."
 - **iLok & DRM:** Our bundled **Wine-GE** runtime is specifically patched to handle iLok, PACE, and Native Access, which typically crash standard Wine.
 - **Sandboxed Stability:** Every plugin runs in its own process. If a plugin crashes, it won't take down your DAW.
@@ -35,7 +36,8 @@ Arthur is now distributed as a self-contained **AppImage**. No compiling, no ins
 1.  **[Download the Latest AppImage](https://github.com/danny1marshall1587-maker/arthur-translation-layer/releases/latest)**.
 2.  Right-click -> **Properties** -> **Permissions** -> Check **"Allow executing file as program"**.
 3.  Double-click to open the **Arthur Manager**.
-4.  Click **"Scan & Sync Plugins"** and you're ready to produce.
+4.  Click **"Batch Install (.exe/.msi)"** to select your Windows installers.
+5.  Click **"Scan & Sync Plugins"** once the installations are finished.
 
 ---
 
