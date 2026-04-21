@@ -98,8 +98,8 @@ def install_desktop_entry():
     try:
         DESKTOP_ENTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
         # Use the current running file (AppImage or script) as the target
-        # Use the current running file (AppImage or script) as the target
-        current_app = os.environ.get('APPIMAGE', os.path.abspath(sys.argv[0]))
+        script_path = os.path.abspath(__file__)
+        current_app = os.environ.get('APPIMAGE', script_path)
 
         # Construct the execution command
         if os.environ.get('APPIMAGE'):
