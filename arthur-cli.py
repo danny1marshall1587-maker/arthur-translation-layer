@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.5"
+VERSION = "v1.4.6"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -334,13 +334,14 @@ def run_gui():
 
     on_status()
     
-    # Auto-Install Logic for New Users
-    appimage_path = os.environ.get('APPIMAGE')
-    if appimage_path and Path(appimage_path) != INSTALL_PATH:
-        # We are running from a temporary location (Downloads), prompt to install
-        log("\n[!] Arthur is not installed to your system yet.")
-        threading.Thread(target=lambda: on_install_to_system(silent=False), daemon=True).start()
+    # Auto-Install Logic for New Users (Schedules on Main Thread to avoid deadlocks)
+    def check_first_run():
+        appimage_path = os.environ.get('APPIMAGE')
+        if appimage_path and Path(appimage_path) != INSTALL_PATH:
+            log("\n[!] Arthur is not installed to your system yet.")
+            on_install_to_system(silent=False)
 
+    window.after(500, check_first_run)
     window.mainloop()
 
 def main():
