@@ -438,11 +438,16 @@ def run_gui():
                 except Exception as e:
                     log(f"    [RETRY] Failed {lib}, attempting force...")
                     try:
-                        subprocess.run([str(winetricks_path), "-q", "--force", lib], env=env, check=False)
+                        # Attempt force and check the result
+                        result = subprocess.run([str(winetricks_path), "-q", "--force", lib], env=env, check=False)
+                        if result.returncode == 0:
+                            log(f"    [OK] {lib} (Forced)")
+                        else:
+                            log(f"    [FAIL] {lib} (Return Code: {result.returncode})")
                         import time
                         time.sleep(3)
-                    except:
-                        log(f"    [FAIL] {lib}: {e}")
+                    except Exception as retry_e:
+                        log(f"    [FAIL] {lib}: {retry_e}")
                 
                 # Smooth progress update (from 20% to 95%)
                 update_progress(20 + int((lib_idx / total_libs) * 75))
