@@ -36,18 +36,18 @@ jobs:
         mkdir -p AppDir/usr/bin
         mkdir -p AppDir/usr/lib
         
-        # Copy our tools
-        cp build/libarthur_bridge.so AppDir/usr/lib/
-        cp arthur-cli.py AppDir/usr/bin/
-        cp AppRun AppDir/
-        cp arthur.desktop AppDir/
-        
         # Download Portable Wine (Wine-GE is perfect for this)
         wget https://github.com/GloriousEggroll/wine-ge-custom/releases/download/GE-Proton8-26/wine-lutris-GE-Proton8-26-x86_64.tar.xz
         tar -xf wine-lutris-GE-Proton8-26-x86_64.tar.xz
         
-        # Move Wine files into AppDir
-        mv lutris-GE-Proton8-26-x86_64/* AppDir/usr/
+        # Merge Wine files into AppDir/usr
+        cp -r lutris-GE-Proton8-26-x86_64/* AppDir/usr/
+        
+        # Copy our tools (last to ensure we overwrite if needed)
+        cp build/libarthur_bridge.so AppDir/usr/lib/
+        cp arthur-cli.py AppDir/usr/bin/
+        cp AppRun AppDir/
+        cp arthur.desktop AppDir/
         
         # Create a dummy icon
         touch AppDir/arthur.png
