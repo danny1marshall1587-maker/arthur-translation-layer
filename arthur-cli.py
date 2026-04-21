@@ -7,11 +7,11 @@ import threading
 import urllib.request
 import json
 import tkinter as tk
-from tkinter import messagebox, scrolledtext, filedialog
+from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.7"
+VERSION = "v1.4.8"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
