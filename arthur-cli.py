@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.8.3"
+VERSION = "v1.8.4"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -472,15 +472,33 @@ def run_gui():
             try:
                 with open(log_path, "r") as f:
                     installed_libs = set(line.strip() for line in f if line.strip())
-                log(f"    [INFO] Detected {len(installed_libs)} already installed libraries.")
+                log(f"    [INFO] Detected {len(installed_libs)} previously tracked libraries.")
             except:
                 pass
+
+        # Define critical files for physical verification
+        integrity_checks = {
+            "vcrun2022": "vcruntime140.dll",
+            "mfc42": "mfc42.dll",
+            "msxml6": "msxml6.dll",
+            "riched20": "riched20.dll"
+        }
 
         for group_name, libs in tasks:
             log(f">>> Processing {group_name}...")
             for lib in libs:
-                if lib in installed_libs:
-                    log(f"    [SKIP] {lib} is already installed.")
+                # PHYSICAL INTEGRITY CHECK: Don't just trust the log, check the disk!
+                is_installed = lib in installed_libs
+                if lib in integrity_checks:
+                    dll_name = integrity_checks[lib]
+                    dll_path = WINE_PREFIX / "drive_c" / "windows" / "system32" / dll_name
+                    if not dll_path.exists():
+                        if is_installed:
+                            log(f"    [ALERT] {lib} was marked as installed but file is MISSING. Forcing repair...")
+                        is_installed = False
+                
+                if is_installed:
+                    log(f"    [SKIP] {lib} is healthy.")
                     continue
 
                 lib_idx += 1
