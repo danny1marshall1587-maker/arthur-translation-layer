@@ -5,23 +5,33 @@ import argparse
 import subprocess
 import threading
 import urllib.request
+import json
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
 
+# Application Version
+VERSION = "v1.4.1"
+
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
+OWNDIR = Path(os.environ.get('APPIMAGE', sys.argv[0])).parent
 
 # Defaults
 DEFAULT_WINE_PREFIX = Path.home() / ".wine"
 WINE_VST3_DIR = DEFAULT_WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST3"
 LINUX_VST3_DIR = Path.home() / ".vst3" / "Arthur"
 WINETRICKS_URL = "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks"
+GITHUB_API_URL = "https://api.github.com/repos/danny1marshall1587-maker/arthur-translation-layer/releases/latest"
+
+# Standard Install Path
+INSTALL_PATH = Path.home() / ".local" / "bin" / "arthur-manager"
+DESKTOP_ENTRY_PATH = Path.home() / ".local" / "share" / "applications" / "arthur.desktop"
 
 # Path to the bridge library
 if APPDIR:
     BRIDGE_SO_PATH = Path(APPDIR) / "usr" / "lib" / "libarthur_bridge.so"
-    WINE_CMD = "wine" # Should be in PATH via AppRun
+    WINE_CMD = "wine" 
 else:
     BRIDGE_SO_PATH = Path.cwd() / "build" / "libarthur_bridge.so"
     WINE_CMD = "wine"
@@ -29,6 +39,7 @@ else:
 def setup_directories():
     """Ensure the target Linux VST3 directory exists."""
     LINUX_VST3_DIR.mkdir(parents=True, exist_ok=True)
+    INSTALL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 def find_wine_plugins():
     """Scans the Wine VST3 directory for plugin folders/files."""
@@ -40,6 +51,29 @@ def find_wine_plugins():
         if item.suffix.lower() == '.vst3':
             plugins.append(item)
     return plugins
+
+def install_desktop_entry():
+    """Creates a desktop entry for the Start Menu integration."""
+    try:
+        DESKTOP_ENTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Use the current running file (AppImage or script) as the target
+        current_app = os.environ.get('APPIMAGE', os.path.abspath(sys.argv[0]))
+        
+        content = f"""[Desktop Entry]
+Name=Arthur Manager
+Exec={current_app}
+Icon=audio-x-generic
+Type=Application
+Categories=AudioVideo;Audio;
+Comment=Arthur VST3 Translation Layer Manager
+Terminal=false
+"""
+        with open(DESKTOP_ENTRY_PATH, "w") as f:
+            f.write(content)
+        DESKTOP_ENTRY_PATH.chmod(0o755)
+        return True
+    except Exception:
+        return False
 
 def sync(log_callback=print):
     """Scans Wine directory and creates bridge links."""
@@ -93,8 +127,11 @@ def clean(log_callback=print):
 def run_gui():
     """Simple Tkinter GUI for the Arthur Translation Layer."""
     window = tk.Tk()
-    window.title("Arthur Translation Layer Manager")
-    window.geometry("800x600")
+    window.title(f"Arthur Translation Layer Manager ({VERSION})")
+    window.geometry("850x650")
+
+    # Integrate into Start Menu on launch if not already there
+    install_desktop_entry()
 
     label = tk.Label(window, text="Arthur Translation Layer", font=("Arial", 16, "bold"))
     label.pack(pady=10)
@@ -102,7 +139,7 @@ def run_gui():
     btn_frame = tk.Frame(window)
     btn_frame.pack(pady=10)
 
-    log_area = scrolledtext.ScrolledText(window, width=95, height=20)
+    log_area = scrolledtext.ScrolledText(window, width=100, height=22)
     log_area.pack(pady=10, padx=10)
 
     def log(msg):
@@ -118,12 +155,51 @@ def run_gui():
         log_area.delete(1.0, tk.END)
         clean(log)
 
+    def update_worker(download_url):
+        log(f">>> DOWNLOADING UPDATE: {download_url}")
+        try:
+            # Download to a temporary location
+            temp_path = INSTALL_PATH.with_suffix(".tmp")
+            urllib.request.urlretrieve(download_url, temp_path)
+            temp_path.chmod(0o755)
+            
+            # If we are running as an AppImage, we tell the user to restart
+            if os.environ.get('APPIMAGE'):
+                log("[SUCCESS] Update downloaded successfully.")
+                log(f"[ACTION REQUIRED] Please replace your current AppImage with the new one found at: {temp_path}")
+                messagebox.showinfo("Update Ready", f"The new version has been downloaded to:\n\n{temp_path}\n\nPlease replace your current AppImage file with this one and restart.")
+            else:
+                # If running as script, we can replace the standard install path
+                log("[SUCCESS] Update downloaded. Ready to replace.")
+                shutil.move(temp_path, INSTALL_PATH)
+                log("Update applied to ~/.local/bin/arthur-manager.")
+        except Exception as e:
+            log(f"[ERROR] Failed to download update: {e}")
+
+    def on_check_updates():
+        log(">>> Checking for updates...")
+        try:
+            with urllib.request.urlopen(GITHUB_API_URL) as response:
+                data = json.loads(response.read().decode())
+                latest_tag = data.get("tag_name")
+                if latest_tag and latest_tag != VERSION:
+                    assets = data.get("assets", [])
+                    appimage_asset = next((a for a in assets if "AppImage" in a["name"]), None)
+                    if appimage_asset:
+                        if messagebox.askyesno("Update Available", f"A new version ({latest_tag}) is available!\n\nWould you like to download and install it now?"):
+                            threading.Thread(target=update_worker, args=(appimage_asset["browser_download_url"],), daemon=True).start()
+                    else:
+                        log(f"New version {latest_tag} found, but no AppImage asset detected.")
+                else:
+                    log("You are running the latest version.")
+        except Exception as e:
+            log(f"[ERROR] Could not check for updates: {e}")
+
     def install_worker(file_paths):
         log(f">>> Batch Installation Started: {len(file_paths)} installers queued.")
         for i, file_path in enumerate(file_paths):
             log(f"\n[{i+1}/{len(file_paths)}] Installing: {os.path.basename(file_path)}")
             try:
-                # Use subprocess.run to wait for the installer to finish before next one
                 process = subprocess.Popen([WINE_CMD, file_path])
                 process.wait()
                 log(f"[SUCCESS] Finished installer: {os.path.basename(file_path)}")
@@ -139,12 +215,10 @@ def run_gui():
             filetypes=[("Installers", "*.exe *.msi"), ("All files", "*.*")]
         )
         if file_paths:
-            # Run installation in a separate thread so GUI doesn't freeze
             threading.Thread(target=install_worker, args=(file_paths,), daemon=True).start()
 
     def prep_worker():
         log(">>> PREPARING WINE FOR PRO AUDIO (This may take a few minutes)...")
-        
         winetricks_path = Path.home() / ".cache" / "arthur" / "winetricks"
         winetricks_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -158,16 +232,13 @@ def run_gui():
                 return
 
         log("[2/3] Installing core libraries (vcrun2015, d3dcompiler_47, corefonts)...")
-        log("      * This fixes installer crashes and UI fonts.")
         try:
-            # -q for quiet mode
             subprocess.run([str(winetricks_path), "-q", "vcrun2015", "d3dcompiler_47", "corefonts"], check=True)
             log("[SUCCESS] Core libraries installed.")
         except Exception as e:
             log(f"[ERROR] Failed to install core libraries: {e}")
 
         log("[3/3] Installing DXVK (Vulkan Graphics)...")
-        log("      * This fixes flickering/black-screen GUIs in FabFilter, Neural DSP, etc.")
         try:
             subprocess.run([str(winetricks_path), "-q", "dxvk"], check=True)
             log("[SUCCESS] DXVK enabled.")
@@ -175,10 +246,9 @@ def run_gui():
             log(f"[ERROR] Failed to enable DXVK: {e}")
 
         log("\n>>> WINE ENVIRONMENT IS NOW PRO-READY.")
-        log("You can now install complex plugins (Waves, NI, etc.) with much higher success rates.")
 
     def on_prepare():
-        if messagebox.askyesno("Prepare Wine", "This will install Visual C++, DirectX components, and Vulkan Graphics into your Wine prefix. This is recommended for high-end plugins.\n\nContinue?"):
+        if messagebox.askyesno("Prepare Wine", "This will install Visual C++, DirectX components, and Vulkan Graphics into your Wine prefix. Recommended for high-end plugins.\n\nContinue?"):
             log_area.delete(1.0, tk.END)
             threading.Thread(target=prep_worker, daemon=True).start()
 
@@ -194,9 +264,10 @@ def run_gui():
             for item in LINUX_VST3_DIR.iterdir():
                 log(f"  - {item.name}")
 
-    tk.Button(btn_frame, text="Prepare Wine for Pro Audio", command=on_prepare, width=25, bg="#FF9800", fg="white").grid(row=0, column=0, padx=5)
+    tk.Button(btn_frame, text="Prepare Wine for Pro Audio", command=on_prepare, width=22, bg="#FF9800", fg="white").grid(row=0, column=0, padx=5)
     tk.Button(btn_frame, text="Batch Install (.exe/.msi)", command=on_install, width=22, bg="#2196F3", fg="white").grid(row=0, column=1, padx=5)
     tk.Button(btn_frame, text="Scan & Sync Plugins", command=on_sync, width=20, bg="#4CAF50", fg="white").grid(row=0, column=2, padx=5)
+    tk.Button(btn_frame, text="Check Updates", command=on_check_updates, width=15, bg="#9C27B0", fg="white").grid(row=0, column=3, padx=5)
     
     status_frame = tk.Frame(window)
     status_frame.pack(pady=5)
@@ -238,3 +309,4 @@ def status_terminal():
 
 if __name__ == "__main__":
     main()
+
