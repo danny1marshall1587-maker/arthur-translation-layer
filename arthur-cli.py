@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.8"
+VERSION = "v1.4.9"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -144,14 +144,6 @@ def run_gui():
     btn_frame = tk.Frame(window)
     btn_frame.pack(pady=10)
 
-    log_area = scrolledtext.ScrolledText(window, width=100, height=22)
-    log_area.pack(pady=10, padx=10)
-
-    def log(msg):
-        log_area.insert(tk.END, msg + "\n")
-        log_area.see(tk.END)
-        window.update_idletasks()
-
     # Log Area
     log_area = scrolledtext.ScrolledText(window, width=90, height=20, bg="black", fg="#00FF00", font=("Monospace", 10))
     log_area.pack(pady=10, padx=10)
@@ -171,6 +163,14 @@ def run_gui():
     def update_progress(val):
         progress_var.set(val)
         window.update_idletasks()
+
+    def on_sync():
+        log_area.delete(1.0, tk.END)
+        sync(log)
+    
+    def on_clean():
+        log_area.delete(1.0, tk.END)
+        clean(log)
 
     def update_worker(download_url):
         log(f">>> DOWNLOADING UPDATE: {download_url}")
