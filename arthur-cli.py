@@ -101,27 +101,32 @@ def install_desktop_entry():
         script_path = os.path.abspath(__file__)
         current_app = os.environ.get('APPIMAGE', script_path)
 
-        # Construct the execution command
+        # Construct the execution command with absolute paths
         if os.environ.get('APPIMAGE'):
             exec_cmd = f'"{current_app}" --appimage-extract-and-run gui'
+            working_dir = os.path.dirname(current_app)
         else:
             # For development mode (running the .py script)
             exec_cmd = f'{sys.executable} "{current_app}" gui'
+            working_dir = os.path.dirname(current_app)
 
         content = f"""[Desktop Entry]
 Name=Arthur Manager
 Exec={exec_cmd}
+Path={working_dir}
 Icon=audio-x-generic
 Type=Application
 Categories=AudioVideo;Audio;
 Comment=Arthur VST3 Translation Layer Manager
 Terminal=false
+StartupWMClass=arthur-manager
 """
         with open(DESKTOP_ENTRY_PATH, "w") as f:
             f.write(content)
         DESKTOP_ENTRY_PATH.chmod(0o755)
         return True
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] Failed to self-heal desktop entry: {e}")
         return False
 
 def sync(log_callback=print):
@@ -183,7 +188,10 @@ def clean(log_callback=print):
     log_callback(f">>> Clean Complete! Removed {removed_count} bridged plugins.")
 
 def run_gui():
-    """Simple Tkinter GUI for the Arthur Translation Layer."""
+    """Starts the Arthur Manager GUI."""
+    # Self-heal the desktop entry on every startup to ensure the link never breaks
+    install_desktop_entry()
+    
     window = tk.Tk()
     window.title(f"Arthur Translation Layer Manager ({VERSION})")
     window.geometry("850x650")
