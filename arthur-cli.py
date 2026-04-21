@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.4.3"
+VERSION = "v1.4.4"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -66,7 +66,7 @@ def install_desktop_entry():
 
         content = f"""[Desktop Entry]
 Name=Arthur Manager
-Exec={exec_cmd}
+Exec="{exec_cmd}"
 Icon=audio-x-generic
 Type=Application
 Categories=AudioVideo;Audio;
