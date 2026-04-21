@@ -3,8 +3,10 @@ build/
 *.so
 *.o
 
-# Ignore cloned reference repos (not needed for build - CMake fetches VST3 SDK)
+# Ignore yabridge source since we just used it for reference
 yabridge/
+
+# Ignore the locally cloned vst3sdk (CI fetches its own via CMake FetchContent)
 vst3sdk/
 
 # Ignore python cache
