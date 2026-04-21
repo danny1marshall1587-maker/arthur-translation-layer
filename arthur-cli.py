@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v1.7.8"
+VERSION = "v1.7.9"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
@@ -424,7 +424,6 @@ def run_gui():
             env["WINEDLLOVERRIDES"] = "mscoree=d;mshtml=d"
             
             log(f"    [INFO] Using binary: {WINE_CMD}")
-            # Reduced timeout - registry files usually finish much faster
             try:
                 subprocess.run([WINE_CMD, "wineboot", "-u"], env=env, check=False, timeout=35)
                 log("    [OK] Prefix base initialized.")
@@ -432,10 +431,11 @@ def run_gui():
                 log("    [INFO] Initialization time-out (likely finished). Proceeding...")
             
             import time
-            time.sleep(3)
+            time.sleep(2)
         except Exception as e:
             log(f"    [INFO] Initial bootstrapper: {e}")
 
+        log(">>> Starting Library Installation Engine...")
         tasks = [
             ("Core Libraries", ["vcrun2022", "mfc42"]),
             ("UI Support", ["msxml6", "riched20", "comctl32"]),
@@ -445,15 +445,17 @@ def run_gui():
         ]
         
         # Check for system dependencies needed by winetricks
+        log("    [CHECK] Verifying system dependencies (cabextract, unzip)...")
         for tool in ["cabextract", "unzip"]:
             if not shutil.which(tool):
-                log(f"[WARNING] Missing '{tool}'! Some libraries might fail to install.")
+                log(f"    [WARNING] Missing '{tool}'! Some libraries might fail to install.")
                 log(f"    -> Please run: sudo apt install {tool}")
         
         # Calculate total individual libraries for smooth progress
         total_libs = sum(len(libs) for _, libs in tasks)
         lib_idx = 0
         
+        log(f">>> Arthur is ready to install {total_libs} libraries.")
         for group_name, libs in tasks:
             log(f">>> Processing {group_name}...")
             for lib in libs:
