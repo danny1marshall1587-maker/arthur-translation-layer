@@ -42,18 +42,13 @@ jobs:
 
     - name: Build Guest (Wine side)
       run: |
-        WINEGCC=$(which winegcc 2>/dev/null || echo "")
-        if [ -z "$WINEGCC" ]; then
-          echo "::warning::winegcc not found, skipping Guest build"
-          exit 0
-        fi
+        # Use WINEPREFIX to ensure we have a working environment
+        export WINEPREFIX=$(pwd)/.wine
+        wineboot -u
         
-        VST3_HEADERS="build/_vst3_headers"
-        
-        # USE winegcc directly with -m64 and -D_WIN32
-        # This is the most robust way to find winsock2.h
+        # winegcc -m64 -std=c++20 -D_WIN32
         winegcc -m64 -std=c++20 -D_WIN32 \
-          -I"$VST3_HEADERS" \
+          -I"build/_vst3_headers" \
           -I"." \
           -Wno-deprecated-declarations \
           -o build/arthur-guest \
@@ -80,7 +75,6 @@ jobs:
         cp build/libarthur_bridge.so AppDir/usr/lib/arthur/
         [ -f build/arthur-guest.exe ] && cp build/arthur-guest.exe AppDir/usr/lib/arthur/
         [ -f build/arthur-guest.exe.so ] && cp build/arthur-guest.exe.so AppDir/usr/lib/arthur/
-        # Also copy the arthur-guest binary if it exists
         [ -f build/arthur-guest ] && cp build/arthur-guest AppDir/usr/lib/arthur/
         cp arthur-cli.py AppDir/usr/bin/
         cp arthur.png AppDir/
