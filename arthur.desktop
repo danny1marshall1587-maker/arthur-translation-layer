@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Arthur
+Icon=arthur
+Exec=arthur-cli.py
+Comment=Wayland-native VST3 Translation Layer for Wine
+Categories=AudioVideo;Audio;
+Terminal=true

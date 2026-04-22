@@ -36,12 +36,24 @@ jobs:
         mkdir -p AppDir/usr/bin
         mkdir -p AppDir/usr/lib/arthur
         
-        # Copy ONLY the Arthur Linux components from the CURRENT build
+        # Copy ONLY the Arthur Linux components
         cp build/libarthur_bridge.so AppDir/usr/lib/arthur/
         cp arthur-cli.py AppDir/usr/bin/
         cp arthur.png AppDir/
         cp AppRun AppDir/
-        cp arthur.desktop AppDir/ 2>/dev/null || true
+        
+        # ENSURE DESKTOP FILE IS IN ROOT OF APPDIR
+        # Use existing arthur.desktop or create it
+        if [ -f "arthur.desktop" ]; then
+          cp arthur.desktop AppDir/
+        else
+          echo "[Desktop Entry]" > AppDir/arthur.desktop
+          echo "Type=Application" >> AppDir/arthur.desktop
+          echo "Name=Arthur" >> AppDir/arthur.desktop
+          echo "Icon=arthur" >> AppDir/arthur.desktop
+          echo "Exec=arthur-cli.py" >> AppDir/arthur.desktop
+          echo "Categories=Audio;" >> AppDir/arthur.desktop
+        fi
         
         # If we have build_artifacts in the repo, copy them as fallback
         if [ -d "build_artifacts" ]; then
