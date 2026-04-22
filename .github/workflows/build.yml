@@ -43,6 +43,7 @@ jobs:
     - name: Build Guest (Wine side)
       run: |
         # wineg++ compiles the Wine-side Guest executable
+        # We need to make sure we use the right include paths for Wine's internal headers
         WINEGPP=$(which wineg++ 2>/dev/null || echo "")
         if [ -z "$WINEGPP" ]; then
           echo "::warning::wineg++ not found, skipping Guest build"
@@ -51,7 +52,8 @@ jobs:
         
         VST3_HEADERS="build/_vst3_headers"
         
-        $WINEGPP -std=c++20 \
+        # Use -m64 and explicit Windows defines for cross-compilation
+        $WINEGPP -m64 -std=c++20 -D_WIN32 \
           -I"$VST3_HEADERS" \
           -I"." \
           -Wno-deprecated-declarations \
@@ -92,7 +94,6 @@ jobs:
     - name: Build AppImage
       run: |
         export ARCH=x86_64
-        # Use a fallback version if ref_name is not a tag
         VERSION=${{ github.ref_name }}
         [ "$VERSION" = "main" ] && VERSION="v2.2.0-beta"
         ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir Arthur-${VERSION}-x86_64.AppImage
