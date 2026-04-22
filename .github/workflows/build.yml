@@ -57,7 +57,8 @@ jobs:
           -Wno-deprecated-declarations \
           -o build/arthur-guest.exe \
           guest.cpp \
-          ipc/control-protocol.cpp
+          ipc/control-protocol.cpp \
+          -lole32 -luuid -lws2_32
         
         echo "Guest built successfully"
         ls -la build/arthur-guest.exe*
@@ -67,7 +68,7 @@ jobs:
         mkdir -p AppDir/usr/bin
         mkdir -p AppDir/usr/lib/arthur
         
-        # Download Portable Wine (Wine-GE for pro-audio compatibility)
+        # Download Portable Wine
         wget -q https://github.com/GloriousEggroll/wine-ge-custom/releases/download/GE-Proton8-26/wine-lutris-GE-Proton8-26-x86_64.tar.xz
         tar -xf wine-lutris-GE-Proton8-26-x86_64.tar.xz
         
@@ -91,7 +92,9 @@ jobs:
     - name: Build AppImage
       run: |
         export ARCH=x86_64
+        # Use a fallback version if ref_name is not a tag
         VERSION=${{ github.ref_name }}
+        [ "$VERSION" = "main" ] && VERSION="v2.2.0-beta"
         ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir Arthur-${VERSION}-x86_64.AppImage
 
     - name: Upload Artifact
