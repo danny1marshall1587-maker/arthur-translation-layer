@@ -11,7 +11,7 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v2.2.0"
+VERSION = "v2.1.0"
 
 # Detect AppImage environment
 APPDIR = os.environ.get('APPDIR')
