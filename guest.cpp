@@ -30,19 +30,32 @@
 #include <vector>
 #include <map>
 #include <cstring>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include "AudioIPC.h"
 
 // POSIX — only use headers that don't conflict with Wine
 #include <unistd.h>
 #include <fcntl.h>
 
 // VST3 SDK
+#define INIT_CLASS_IID
 #include <pluginterfaces/base/ipluginbase.h>
 #include <pluginterfaces/vst/ivstcomponent.h>
 #include <pluginterfaces/vst/ivstaudioprocessor.h>
+#include <pluginterfaces/gui/iplugview.h>
+#include <pluginterfaces/vst/ivsteditcontroller.h>
+#include <pluginterfaces/vst/ivstplugview.h>
+#ifdef interface
+#undef interface
+#endif
+#include "WaylandPluginWindow.h"
 
 #include "ipc/control-protocol.h"
 
 using namespace Steinberg;
+using namespace arthur;
 using namespace arthur::ipc;
 
 // --- Typedefs for VST3 entry points ---
@@ -55,6 +68,89 @@ static HMODULE g_plugin_module = nullptr;
 static IPluginFactory* g_factory = nullptr;
 static std::map<uint64_t, FUnknown*> g_instances;
 static uint64_t g_next_instance_id = 1;
+
+struct InstanceContext {
+    Vst::IAudioProcessor* processor = nullptr;
+    Vst::IEditController* controller = nullptr;
+    IPlugView* view = nullptr;
+    HWND hwnd = nullptr;
+    WaylandPluginWindow* wayland_window = nullptr;
+
+    AudioTransport transport;
+    std::thread audio_thread;
+    std::atomic<bool> thread_running{false};
+
+    ~InstanceContext() {
+        thread_running = false;
+        if (audio_thread.joinable()) audio_thread.join();
+        if (wayland_window) delete wayland_window;
+        if (view) {
+            view->removed();
+            view->release();
+        }
+        if (hwnd) DestroyWindow(hwnd);
+        if (controller) controller->release();
+        if (processor) processor->release();
+    }
+};
+
+static std::map<uint64_t, InstanceContext*> g_instance_contexts;
+
+void audio_thread_loop(uint64_t instance_id, InstanceContext* ctx) {
+    auto* shm = ctx->transport.get();
+    if (!shm) return;
+
+    std::cerr << "[Arthur Guest] Audio thread started for instance " << instance_id << std::endl;
+
+    while (ctx->thread_running) {
+        // 1. Wait for Host to provide data
+        while (shm->state.load(std::memory_order_acquire) != TransportState::STATE_HOST_WRITTEN) {
+            if (!ctx->thread_running) return;
+            // Short yield to avoid 100% CPU on idle, but keep latency low
+            std::this_thread::yield();
+        }
+
+        // 2. Prepare Vst::ProcessData
+        Vst::ProcessData data;
+        data.numSamples = shm->sample_count;
+        data.numInputs = shm->num_inputs;
+        data.numOutputs = shm->num_outputs;
+        
+        // We need to map our planar buffers to the VST3 channel buffers
+        Vst::AudioBusBuffers inputs[SHM_MAX_CHANNELS];
+        Vst::AudioBusBuffers outputs[SHM_MAX_CHANNELS];
+        
+        for (int i = 0; i < shm->num_inputs; ++i) {
+            inputs[i].numChannels = 2; // For now assume stereo
+            inputs[i].channelBuffers32 = new float*[2];
+            inputs[i].channelBuffers32[0] = shm->input_buffers[0];
+            inputs[i].channelBuffers32[1] = shm->input_buffers[1];
+        }
+        for (int i = 0; i < shm->num_outputs; ++i) {
+            outputs[i].numChannels = 2;
+            outputs[i].channelBuffers32 = new float*[2];
+            outputs[i].channelBuffers32[0] = shm->output_buffers[0];
+            outputs[i].channelBuffers32[1] = shm->output_buffers[1];
+        }
+
+        data.inputs = inputs;
+        data.numInputs = shm->num_inputs;
+        data.outputs = outputs;
+        data.numOutputs = shm->num_outputs;
+
+        // 3. Process
+        if (ctx->processor) {
+            ctx->processor->process(data);
+        }
+
+        // Cleanup temp buffers
+        for (int i = 0; i < shm->num_inputs; ++i) delete[] inputs[i].channelBuffers32;
+        for (int i = 0; i < shm->num_outputs; ++i) delete[] outputs[i].channelBuffers32;
+
+        // 4. Signal Host
+        shm->state.store(TransportState::STATE_GUEST_PROCESSED, std::memory_order_release);
+    }
+}
 
 /**
  * Load a Windows VST3 DLL and extract its factory.
@@ -168,7 +264,7 @@ bool handle_message(const MessageHeader& header) {
             }
 
             send_message(g_resp_fd, MessageType::RESPONSE_FACTORY_INFO,
-                         header.request_id, &resp, sizeof(resp));
+                         header.request_id, header.instance_id, &resp, sizeof(resp));
             return true;
         }
 
@@ -190,7 +286,7 @@ bool handle_message(const MessageHeader& header) {
             }
 
             send_message(g_resp_fd, MessageType::RESPONSE_CLASS_INFO,
-                         header.request_id, &resp, sizeof(resp));
+                         header.request_id, header.instance_id, &resp, sizeof(resp));
             return true;
         }
 
@@ -210,20 +306,151 @@ bool handle_message(const MessageHeader& header) {
 
                 if (obj) {
                     uint64_t id = g_next_instance_id++;
+                    auto* ctx = new InstanceContext();
                     g_instances[id] = static_cast<FUnknown*>(obj);
+                    g_instance_contexts[id] = ctx;
+
+                    // Query for Audio Processor
+                    static_cast<FUnknown*>(obj)->queryInterface(Vst::IAudioProcessor::iid, (void**)&ctx->processor);
+                    // Query for Edit Controller
+                    static_cast<FUnknown*>(obj)->queryInterface(Vst::IEditController::iid, (void**)&ctx->controller);
+
                     resp.instance_id = id;
-                    std::cerr << "[Arthur Guest] Created instance " << id << std::endl;
+                    resp.result = kResultOk;
+                    std::cerr << "[Arthur Guest] Created instance " << id 
+                              << " (Proc: " << (ctx->processor ? "YES" : "NO")
+                              << ", Ctrl: " << (ctx->controller ? "YES" : "NO") << ")" << std::endl;
                 }
             }
 
             send_message(g_resp_fd, MessageType::RESPONSE_CREATE_INSTANCE,
-                         header.request_id, &resp, sizeof(resp));
+                         header.request_id, header.instance_id, &resp, sizeof(resp));
             return true;
         }
 
         case MessageType::REQUEST_DESTROY_INSTANCE: {
+            uint64_t id = header.instance_id;
+            auto it = g_instances.find(id);
+            if (it != g_instances.end()) {
+                if (it->second) it->second->release();
+                g_instances.erase(it);
+            }
+
+            auto ait = g_instance_contexts.find(id);
+            if (ait != g_instance_contexts.end()) {
+                delete ait->second;
+                g_instance_contexts.erase(ait);
+            }
+
+            std::cerr << "[Arthur Guest] Destroyed instance " << id << std::endl;
             send_message(g_resp_fd, MessageType::RESPONSE_DESTROY_INSTANCE,
-                         header.request_id, nullptr, 0);
+                         header.request_id, header.instance_id, nullptr, 0);
+            return true;
+        }
+
+        case MessageType::REQUEST_SETUP_PROCESSING: {
+            SetupProcessingRequest req;
+            if (!recv_payload(g_req_fd, &req, header.payload_size)) return false;
+
+            auto* ctx = g_instance_contexts[header.instance_id];
+            if (ctx && ctx->transport.attach(req.shm_name)) {
+                Vst::ProcessSetup setup;
+                setup.sampleRate = req.sample_rate;
+                setup.maxSamplesPerBlock = req.max_block_size;
+                setup.processMode = req.process_mode;
+                ctx->processor->setupProcessing(setup);
+                
+                if (!ctx->thread_running) {
+                    ctx->thread_running = true;
+                    ctx->audio_thread = std::thread(audio_thread_loop, header.instance_id, ctx);
+                }
+            }
+
+            send_message(g_resp_fd, MessageType::RESPONSE_SETUP_PROCESSING,
+                         header.request_id, header.instance_id, nullptr, 0);
+            return true;
+        }
+
+        case MessageType::REQUEST_SET_BUS_CONFIG: {
+            SetBusConfigRequest req;
+            if (!recv_payload(g_req_fd, &req, header.payload_size)) return false;
+
+            auto* ctx = g_instance_contexts[header.instance_id];
+            if (ctx) {
+                ctx->processor->setBusArrangements(req.input_arrangements, req.num_inputs,
+                                                 req.output_arrangements, req.num_outputs);
+            }
+
+            send_message(g_resp_fd, MessageType::RESPONSE_SET_BUS_CONFIG,
+                         header.request_id, header.instance_id, nullptr, 0);
+            return true;
+        }
+
+        case MessageType::REQUEST_SET_STATE: {
+            SetStateRequest req;
+            if (!recv_payload(g_req_fd, &req, header.payload_size)) return false;
+
+            auto* ctx = g_instance_contexts[header.instance_id];
+            if (ctx) {
+                ctx->processor->setProcessing(req.state);
+            }
+
+            send_message(g_resp_fd, MessageType::RESPONSE_SET_STATE,
+                         header.request_id, header.instance_id, nullptr, 0);
+            return true;
+        }
+
+        case MessageType::REQUEST_OPEN_EDITOR: {
+            auto* ctx = g_instance_contexts[header.instance_id];
+            OpenEditorResponse resp{0, 0};
+            if (ctx && ctx->controller) {
+                if (!ctx->view) {
+                    ctx->view = ctx->controller->createView("Editor");
+                }
+                if (ctx->view) {
+                    ViewRect rect;
+                    if (ctx->view->getSize(&rect) == kResultOk) {
+                        resp.width = rect.right - rect.left;
+                        resp.height = rect.bottom - rect.top;
+                    } else {
+                        resp.width = 800; resp.height = 600; // Fallback
+                    }
+                }
+            }
+            send_message(g_resp_fd, MessageType::RESPONSE_OPEN_EDITOR,
+                         header.request_id, header.instance_id, &resp, sizeof(resp));
+            return true;
+        }
+
+        case MessageType::REQUEST_ATTACH_WINDOW: {
+            AttachWindowRequest req;
+            if (!recv_payload(g_req_fd, &req, header.payload_size)) return false;
+
+            auto* ctx = g_instance_contexts[header.instance_id];
+            if (ctx && ctx->view) {
+                if (!ctx->hwnd) {
+                    ctx->hwnd = CreateWindowExA(0, "Static", "Arthur Plugin Window",
+                                               WS_CHILD | WS_VISIBLE, 0, 0, 800, 600,
+                                               GetDesktopWindow(), nullptr, nullptr, nullptr);
+                }
+
+                // If handle looks like an xdg-foreign handle (starts with 'wayland:')
+                if (std::strncmp(req.handle, "wayland:", 8) != 0 && std::strncmp(req.handle, "x11:", 4) != 0) {
+                    if (!ctx->wayland_window) {
+                        ctx->wayland_window = new WaylandPluginWindow(nullptr, 800, 600);
+                    }
+                    if (ctx->wayland_window->import_surface(req.handle)) {
+                         std::cerr << "[Arthur Guest] Imported DAW surface via xdg-foreign handle: " << req.handle << std::endl;
+                         ctx->wayland_window->attach_hwnd(ctx->hwnd);
+                    }
+                }
+
+                ctx->view->attached(ctx->hwnd, "HWND");
+                std::cerr << "[Arthur Guest] Attached view to HWND: " << ctx->hwnd << std::endl;
+            }
+
+            send_message(g_resp_fd, MessageType::RESPONSE_ATTACH_WINDOW,
+                         header.request_id, header.instance_id, nullptr, 0);
             return true;
         }
 
@@ -270,7 +497,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Send GUEST_READY signal
-    send_message(g_resp_fd, MessageType::GUEST_READY, 0, nullptr, 0);
+    send_message(g_resp_fd, MessageType::GUEST_READY, 0, 0, nullptr, 0);
 
     // Message loop — handle requests from the bridge
     while (true) {

@@ -7,12 +7,13 @@
 namespace arthur {
 namespace ipc {
 
-bool send_message(int fd, MessageType type, uint32_t request_id,
+bool send_message(int fd, MessageType type, uint32_t request_id, uint64_t instance_id,
                   const void* payload, uint32_t payload_size) {
     MessageHeader header;
     header.type = type;
     header.payload_size = payload_size;
     header.request_id = request_id;
+    header.instance_id = instance_id;
 
     // Send header
     ssize_t sent = 0;

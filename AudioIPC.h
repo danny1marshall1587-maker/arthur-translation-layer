@@ -2,88 +2,123 @@
 
 #include <atomic>
 #include <cstdint>
-#include <array>
-#include <cassert>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string>
+#include <cstring>
 
 namespace arthur {
 
-// Constants defining the IPC limits
-constexpr size_t MAX_AUDIO_CHANNELS = 64;
-constexpr size_t MAX_SAMPLES_PER_BLOCK = 4096;
-constexpr size_t IPC_RING_BUFFER_SIZE = 16; // Must be a power of 2 for fast masking
+// Constants for performance and capacity
+constexpr uint32_t SHM_MAX_CHANNELS = 32;
+constexpr uint32_t SHM_MAX_SAMPLES = 4096;
 
 /**
- * A single block of audio data transferred between the Linux Host and Wine.
+ * State machine for the audio transport.
  */
-struct AudioProcessBlock {
-    uint32_t sample_count;
-    uint32_t num_channels;
-    
-    // We use a flat array to ensure it's trivially copyable over shared memory.
-    // In a real system, this is allocated in an mmap'ed shared memory region.
-    float channels[MAX_AUDIO_CHANNELS][MAX_SAMPLES_PER_BLOCK];
+enum class TransportState : uint32_t {
+    STATE_IDLE = 0,
+    STATE_HOST_WRITTEN = 1,
+    STATE_GUEST_PROCESSED = 2,
+    STATE_ERROR = 3
 };
 
 /**
- * A Single-Producer, Single-Consumer (SPSC) Lock-Free Ring Buffer.
- * Designed to be allocated in a shared memory region (e.g. via shm_open / mmap).
- * 
- * Crucial Audio Rule: NO MUTEXES. NO ALLOCATIONS. 
- * We rely strictly on atomic acquire/release semantics.
+ * MIDI Event structure for transport
  */
-class LockFreeAudioQueue {
+struct ShmMidiEvent {
+    uint32_t sample_offset;
+    uint32_t size;
+    uint8_t data[16]; 
+};
+
+/**
+ * The actual memory layout for Shared Memory.
+ */
+struct AudioSharedMemory {
+    alignas(64) std::atomic<TransportState> state;
+    uint32_t sample_count;
+    uint32_t num_inputs;
+    uint32_t num_outputs;
+    double sample_rate;
+    int64_t playhead_pos;
+
+    float input_buffers[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
+    float output_buffers[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
+
+    uint32_t midi_in_count;
+    ShmMidiEvent midi_in[256];
+    uint32_t midi_out_count;
+    ShmMidiEvent midi_out[256];
+};
+
+/**
+ * Helper to manage the SHM lifecycle.
+ */
+class AudioTransport {
 public:
-    LockFreeAudioQueue() : write_idx_(0), read_idx_(0) {}
-
-    /**
-     * Push a block to the queue. (Called by the audio thread producer).
-     * Returns true if successful, false if the queue is full (buffer overrun).
-     */
-    bool push(const AudioProcessBlock& block) {
-        const size_t current_tail = write_idx_.load(std::memory_order_relaxed);
-        const size_t next_tail = increment(current_tail);
-
-        // If the next write position is the current read position, queue is full.
-        if (next_tail == read_idx_.load(std::memory_order_acquire)) {
-            return false; 
-        }
-
-        buffer_[current_tail] = block;
-        
-        // Release ensures the data write happens before we update the tail index.
-        write_idx_.store(next_tail, std::memory_order_release);
-        return true;
+    AudioTransport() : shm_ptr_(nullptr), fd_(-1) {}
+    
+    ~AudioTransport() {
+        detach();
     }
 
-    /**
-     * Pop a block from the queue. (Called by the audio thread consumer).
-     * Returns true if successful, false if the queue is empty.
-     */
-    bool pop(AudioProcessBlock& out_block) {
-        const size_t current_head = read_idx_.load(std::memory_order_relaxed);
+    bool create(const std::string& name) {
+        name_ = "/" + name;
+        fd_ = shm_open(name_.c_str(), O_CREAT | O_RDWR, 0666);
+        if (fd_ < 0) return false;
 
-        // If head equals tail, queue is empty.
-        if (current_head == write_idx_.load(std::memory_order_acquire)) {
+        if (ftruncate(fd_, sizeof(AudioSharedMemory)) < 0) return false;
+
+        shm_ptr_ = (AudioSharedMemory*)mmap(nullptr, sizeof(AudioSharedMemory), 
+                                           PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+        
+        if (shm_ptr_ == MAP_FAILED) {
+            shm_ptr_ = nullptr;
             return false;
         }
 
-        out_block = buffer_[current_head];
-
-        // Release ensures data read happens before we update the head index.
-        read_idx_.store(increment(current_head), std::memory_order_release);
+        shm_ptr_->state.store(TransportState::STATE_IDLE);
         return true;
     }
 
-private:
-    inline size_t increment(size_t idx) const {
-        return (idx + 1) & (IPC_RING_BUFFER_SIZE - 1);
+    bool attach(const std::string& name) {
+        name_ = "/" + name;
+        fd_ = shm_open(name_.c_str(), O_RDWR, 0666);
+        if (fd_ < 0) return false;
+
+        shm_ptr_ = (AudioSharedMemory*)mmap(nullptr, sizeof(AudioSharedMemory), 
+                                           PROT_READ | PROT_WRITE, MAP_SHARED, fd_, 0);
+        
+        if (shm_ptr_ == MAP_FAILED) {
+            shm_ptr_ = nullptr;
+            return false;
+        }
+        return true;
     }
 
-    std::array<AudioProcessBlock, IPC_RING_BUFFER_SIZE> buffer_;
-    
-    // Cache line padding to prevent false sharing between the producer and consumer cores.
-    alignas(64) std::atomic<size_t> write_idx_;
-    alignas(64) std::atomic<size_t> read_idx_;
+    void detach() {
+        if (shm_ptr_ && shm_ptr_ != MAP_FAILED) {
+            munmap(shm_ptr_, sizeof(AudioSharedMemory));
+            shm_ptr_ = nullptr;
+        }
+        if (fd_ >= 0) {
+            close(fd_);
+            fd_ = -1;
+        }
+        if (!name_.empty()) {
+            shm_unlink(name_.c_str());
+            name_ = "";
+        }
+    }
+
+    AudioSharedMemory* get() { return shm_ptr_; }
+
+private:
+    AudioSharedMemory* shm_ptr_;
+    int fd_;
+    std::string name_;
 };
 
 } // namespace arthur
