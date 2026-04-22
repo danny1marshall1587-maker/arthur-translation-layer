@@ -34,6 +34,8 @@ jobs:
         sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/$(lsb_release -cs)/winehq-$(lsb_release -cs).sources
         sudo apt-get update
         sudo apt-get install -y --install-recommends winehq-stable || sudo apt-get install -y wine64 wine32 wine64-tools
+        # Ensure we have the development headers for Wine
+        sudo apt-get install -y libwine-dev
 
     - name: Configure & Build Bridge (Linux side)
       run: |
@@ -42,14 +44,13 @@ jobs:
 
     - name: Build Guest (Wine side)
       run: |
-        # Use WINEPREFIX to ensure we have a working environment
-        export WINEPREFIX=$(pwd)/.wine
-        wineboot -u
-        
-        # winegcc -m64 -std=c++20 -D_WIN32
+        # Use winegcc with -I/usr/include/wine/windows to force finding headers
+        # This bypasses the need for a working wineboot/display server
         winegcc -m64 -std=c++20 -D_WIN32 \
           -I"build/_vst3_headers" \
           -I"." \
+          -I"/usr/include/wine/windows" \
+          -I"/usr/include/wine/msvcrt" \
           -Wno-deprecated-declarations \
           -o build/arthur-guest \
           guest.cpp \
