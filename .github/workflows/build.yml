@@ -36,16 +36,18 @@ jobs:
         mkdir -p AppDir/usr/bin
         mkdir -p AppDir/usr/lib/arthur
         
-        # Copy ONLY the Arthur Linux components
+        # Copy ONLY the Arthur Linux components from the CURRENT build
         cp build/libarthur_bridge.so AppDir/usr/lib/arthur/
         cp arthur-cli.py AppDir/usr/bin/
         cp arthur.png AppDir/
         cp AppRun AppDir/
         cp arthur.desktop AppDir/ 2>/dev/null || true
         
-        # Add the 'Golden' backup binaries to the AppImage as a fallback
-        mkdir -p AppDir/usr/lib/arthur/fallback
-        cp build_artifacts/libarthur_bridge.so AppDir/usr/lib/arthur/fallback/
+        # If we have build_artifacts in the repo, copy them as fallback
+        if [ -d "build_artifacts" ]; then
+          mkdir -p AppDir/usr/lib/arthur/fallback
+          cp build_artifacts/* AppDir/usr/lib/arthur/fallback/ || true
+        fi
 
     - name: Download AppImageTool
       run: |
