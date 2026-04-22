@@ -1,21 +1,27 @@
 cmake_minimum_required(VERSION 3.10)
-project(arthur)
+project(ArthurBridge)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Force static linking of runtime
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
+# Force static linking for portability
+set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
+set(CMAKE_SHARED_LINKER_FLAGS "-static-libgcc -static-libstdc++")
 
-include_directories(build/_vst3_headers)
-
-# Include vstiids.cpp to provide mandatory symbol definitions
-add_library(arthur_bridge SHARED main.cpp vstiids.cpp)
-target_link_libraries(arthur_bridge wayland-client dl)
-
-set_target_properties(arthur_bridge PROPERTIES 
-    LIBRARY_OUTPUT_NAME "arthur_bridge"
-    NO_SONAME ON
+# Linux Bridge (VST3)
+add_library(arthur_bridge SHARED
+    main.cpp
+    vstiids.cpp
 )
+
+target_include_directories(arthur_bridge PRIVATE 
+    ${CMAKE_SOURCE_DIR}
+    build/_vst3_headers
+)
+
+target_link_libraries(arthur_bridge PRIVATE rt pthread)
+set_target_properties(arthur_bridge PROPERTIES PREFIX "" NO_SONAME ON)
+
+# Arthur Daemon
+add_executable(arthur-daemon arthur-daemon.cpp)
+target_link_libraries(arthur-daemon PRIVATE rt pthread)

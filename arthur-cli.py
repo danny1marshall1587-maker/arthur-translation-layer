@@ -11,129 +11,61 @@ from tkinter import messagebox, scrolledtext, filedialog, ttk
 from pathlib import Path
 
 # Application Version
-VERSION = "v2.2.0"
-
-# Detect AppImage environment
-APPDIR = os.environ.get('APPDIR')
-OWNDIR = Path(os.environ.get('APPIMAGE', sys.argv[0])).parent
+VERSION = "v2.2.0-FINAL-FIX"
 
 # Defaults
-WINE_PREFIX = Path.home() / ".arthur-wine"
-if not WINE_PREFIX.exists():
-    WINE_PREFIX = Path.home() / ".wine"
-
-WINE_VST3_LOCATIONS = [
-    WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST3",
-    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "Common Files" / "VST3",
-    WINE_PREFIX / "drive_c" / "users" / os.getlogin() / "AppData" / "Roaming" / "Common Files" / "VST3",
-    WINE_PREFIX / "drive_c" / "users" / "Public" / "Documents" / "VST3",
-    WINE_PREFIX / "drive_c" / "Program Files" / "Steinberg" / "VSTPlugins",
-    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "Steinberg" / "VSTPlugins",
-    WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "Steinberg" / "VST2",
-    WINE_PREFIX / "drive_c" / "Program Files" / "VSTPlugins",
-    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "VSTPlugins",
-    WINE_PREFIX / "drive_c" / "Program Files" / "Common Files" / "VST2",
-    WINE_PREFIX / "drive_c" / "VSTPlugins",
-    WINE_PREFIX / "drive_c" / "VST",
-    WINE_PREFIX / "drive_c" / "Program Files" / "Native Instruments" / "VSTPlugins 64 bit",
-    WINE_PREFIX / "drive_c" / "Program Files (x86)" / "Waves" / "Plug-Ins V15",
-    Path.home() / ".wine" / "drive_c" / "Program Files" / "Common Files" / "VST3",
-    Path.home() / ".wine" / "drive_c" / "Program Files" / "VSTPlugins",
-    Path.home() / ".wine" / "drive_c" / "users" / os.getlogin() / "AppData" / "Roaming" / "Common Files" / "VST3"
-]
-
 LINUX_VST3_DIR = Path.home() / ".vst3"
 REAPER_CONFIG_DIR = Path.home() / ".config" / "REAPER"
 
 # Path to the bridge library
-if APPDIR:
-    BRIDGE_SO_PATH = Path(APPDIR) / "usr" / "lib" / "libarthur_bridge.so"
-else:
-    BRIDGE_SO_PATH = Path(__file__).parent / "build" / "libarthur_bridge.so"
+BRIDGE_SO_PATH = Path(__file__).parent / "build" / "arthur_bridge.so"
 
-def setup_directories():
-    LINUX_VST3_DIR.mkdir(parents=True, exist_ok=True)
+def clear_reaper_cache():
+    inifiles = ["reaper-vstplugins64.ini", "reaper-vstplugins64-failed.ini"]
+    for ini in inifiles:
+        p = REAPER_CONFIG_DIR / ini
+        if p.exists():
+            p.unlink()
+    return True
 
-def find_wine_plugins():
-    plugins = []
-    seen_paths = set()
-    for directory in WINE_VST3_LOCATIONS:
-        if not directory.exists(): continue
-        for item in directory.rglob('*.vst3'):
-            # Some VST3s are single files, some are folders.
-            abs_path = item.resolve()
-            if abs_path not in seen_paths:
-                plugins.append(item)
-                seen_paths.add(abs_path)
-    return plugins
-
-def sync(log_callback=print):
-    log_callback(">>> [GOLDEN SYNC] Universal Deployment Started...")
+def deploy_bridge():
     if not BRIDGE_SO_PATH.exists():
-        log_callback(f"[ERROR] Bridge library not found at {BRIDGE_SO_PATH}")
-        return
-
-    setup_directories()
-    plugins = find_wine_plugins()
-    if not plugins:
-        log_callback("No Windows plugins found to bridge.")
-        return
-
-    synced_count = 0
-    for plugin in plugins:
-        # Create a proper VST3 bundle structure: PluginName.vst3/Contents/x86_64-linux/
-        bundle_dir = LINUX_VST3_DIR / plugin.name
-        binary_dir = bundle_dir / "Contents" / "x86_64-linux"
-        
-        # Ensure the binary filename matches the bundle name (Steinberg standard)
-        target_name = plugin.stem + ".so"
-        target_bin = binary_dir / target_name
-
-        try:
-            binary_dir.mkdir(parents=True, exist_ok=True)
-            # Deploy the Golden Shell
-            shutil.copy2(BRIDGE_SO_PATH, target_bin)
-            target_bin.chmod(0o755)
-            log_callback(f"[+] BRIDGED: {plugin.name}")
-            synced_count += 1
-        except Exception as e:
-            log_callback(f"[ERROR] Failed {plugin.name}: {e}")
-
-    log_callback(f"\n>>> SYNC COMPLETE! {synced_count} plugins refreshed.")
-    log_callback(">>> [ACTION] Clearing REAPER scan cache to ensure fresh load...")
+        return False, f"Bridge binary missing at {BRIDGE_SO_PATH}. Run build first!"
     
-    # Automatic cache clearing to prevent 'Failed Scan' persistent state
-    try:
-        for f in ["reaper-vstplugins64.ini", "reaper-vstplugins64-failed.ini"]:
-            cache_file = REAPER_CONFIG_DIR / f
-            if cache_file.exists():
-                cache_file.unlink()
-                log_callback(f"    [CLEANED] {f}")
-    except Exception as e:
-        log_callback(f"    [WARN] Cache clear failed: {e}")
-
-def clean(log_callback=print):
-    log_callback(">>> Cleaning all bridged plugins...")
-    if not LINUX_VST3_DIR.exists(): return
-    for item in LINUX_VST3_DIR.iterdir():
-        try:
-            if item.is_dir(): shutil.rmtree(item)
-            else: item.unlink()
-        except: pass
-    log_callback(">>> Clean Complete.")
+    # 1. Clean the target VST3 dir
+    if LINUX_VST3_DIR.exists():
+        shutil.rmtree(LINUX_VST3_DIR)
+    LINUX_VST3_DIR.mkdir(parents=True)
+    
+    # 2. Search for plugins recursively (FabFilter is in a subfolder!)
+    search_paths = [
+        Path.home() / ".wine/drive_c/Program Files/Common Files/VST3",
+        Path.home() / ".wine/drive_c/Program Files (x86)/Common Files/VST3"
+    ]
+    
+    count = 0
+    for base_p in search_paths:
+        if base_p.exists():
+            # Recursive search for .vst3
+            for vst in base_p.rglob("*.vst3"):
+                # If it's a directory (standard VST3 bundle)
+                if vst.is_dir():
+                    plugin_name = vst.stem
+                    target_bundle = LINUX_VST3_DIR / f"{plugin_name}.vst3" / "Contents" / "x86_64-linux"
+                    target_bundle.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(BRIDGE_SO_PATH, target_bundle / f"{plugin_name}.so")
+                    count += 1
+    
+    return True, f"Successfully deployed {count} plugins to {LINUX_VST3_DIR}"
 
 def run_gui():
     window = tk.Tk()
-    window.title(f"Arthur Universal Manager ({VERSION})")
+    window.title(f"Arthur FINAL REPAIR ({VERSION})")
     window.geometry("850x650")
 
-    label = tk.Label(window, text="Arthur Universal Plugin Bridge", font=("Arial", 16, "bold"))
-    label.pack(pady=10)
+    tk.Label(window, text="Arthur Universal Repair Manager", font=("Arial", 16, "bold")).pack(pady=10)
 
-    btn_frame = tk.Frame(window)
-    btn_frame.pack(pady=10)
-
-    log_area = scrolledtext.ScrolledText(window, width=90, height=20, bg="black", fg="#00FF00", font=("Monospace", 10))
+    log_area = scrolledtext.ScrolledText(window, width=90, height=25, bg="black", fg="#00FF00", font=("Monospace", 10))
     log_area.pack(pady=10, padx=10)
 
     def log(msg):
@@ -141,39 +73,25 @@ def run_gui():
         log_area.see(tk.END)
         window.update_idletasks()
 
-    def on_sync():
+    def on_full_repair():
         log_area.delete(1.0, tk.END)
-        sync(log)
-        messagebox.showinfo("Success", "All plugins have been bridged and REAPER cache cleared.\n\nRestart REAPER now to see your plugins!")
+        log(">>> INITIATING RECOVERY...")
+        clear_reaper_cache()
+        log(">>> [OK] Cache Cleared.")
+        success, msg = deploy_bridge()
+        if success:
+            log(f">>> [OK] {msg}")
+        else:
+            log(f">>> [ERROR] {msg}")
+        log("\n>>> RESTART REAPER NOW.")
+        messagebox.showinfo("Arthur", "Recovery Complete. Restart REAPER.")
 
-    def on_clean():
-        if messagebox.askyesno("Clean All", "This will remove ALL Arthur bridged plugins from your system. Continue?"):
-            log_area.delete(1.0, tk.END)
-            clean(log)
+    btn_frame = tk.Frame(window)
+    btn_frame.pack(pady=10)
+    tk.Button(btn_frame, text="FULL REPAIR & SYNC", command=on_full_repair, width=30, height=2, bg="#4CAF50", fg="white", font=("Arial", 12, "bold")).pack()
 
-    def on_status():
-        log_area.delete(1.0, tk.END)
-        log(">>> ARTHUR SYSTEM STATUS\n")
-        log(f"Bridge Source: {BRIDGE_SO_PATH}")
-        log(f"Linux VST3 Path: {LINUX_VST3_DIR}")
-        plugins = find_wine_plugins()
-        log(f"\nFound {len(plugins)} Windows VST3 plugins:")
-        for p in plugins: log(f"  - {p.name}")
-
-    tk.Button(btn_frame, text="REPAIR & SYNC ALL PLUGINS", command=on_sync, width=35, bg="#4CAF50", fg="white").grid(row=0, column=0, padx=5)
-    tk.Button(btn_frame, text="CLEAN SYSTEM", command=on_clean, width=15, bg="#F44336", fg="white").grid(row=0, column=1, padx=5)
-    tk.Button(btn_frame, text="SHOW STATUS", command=on_status, width=15).grid(row=0, column=2, padx=5)
-
-    on_status()
+    log(">>> System Ready. Click 'FULL REPAIR' to find and bridge FabFilter + other plugins.")
     window.mainloop()
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", nargs="?", default="gui")
-    args = parser.parse_args()
-    if args.command == "gui": run_gui()
-    elif args.command == "sync": sync()
-    elif args.command == "clean": clean()
-
 if __name__ == "__main__":
-    main()
+    run_gui()
