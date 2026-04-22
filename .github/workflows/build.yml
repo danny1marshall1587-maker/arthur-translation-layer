@@ -21,6 +21,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk
 
+    - name: Download VST3 Headers
+      run: |
+        mkdir -p build/_vst3_headers
+        git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git build/_vst3_headers/pluginterfaces
+        git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git build/_vst3_headers/base
+
     - name: Install Wine (for Guest cross-compilation)
       run: |
         sudo mkdir -pm755 /etc/apt/keyrings
