@@ -74,7 +74,7 @@ jobs:
         run: |
           cd tauri_src
           # Run Tauri build (compiles the Rust backend)
-          ./node_modules/.bin/tauri build --no-bundle
+          ./node_modules/.bin/tauri build --bundles none
           cd ..
           mkdir -p bin
           cp tauri_src/src-tauri/target/release/arthur-control-center bin/
