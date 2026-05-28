@@ -274,7 +274,7 @@ Executing installer binary inside virtualization layer...</pre>
                     </div>
                 </div>
 
-                <div class="card wide-card">
+                <div class="card wide-card" id="tuning-selection-card">
                     <h3>Virtual DSP Core Partitioning</h3>
                     <p class="description">Allocate isolated CPU cores to run host translation plugins exclusively. Isolating cores shields the audio process from scheduler interrupts.</p>
                     <div class="slider-container">
@@ -287,6 +287,36 @@ Executing installer binary inside virtualization layer...</pre>
                     </div>
                     <button class="action-btn" id="apply-isolation-btn">Apply Core Isolation & Tune System</button>
                 </div>
+
+                <!-- System Installer Wizard GUI -->
+                <div class="card wide-card install-progress-card hidden" id="system-setup-progress-card">
+                    <h3>System Tuning & Setup Wizard</h3>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="system-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-status">
+                            <span id="system-progress-percent">0%</span>
+                            <span id="system-progress-text">Initializing system tuner...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="installer-console">
+                        <div class="console-header">
+                            <span>SYSTEM TUNING LOGS</span>
+                            <span class="pulse-dot green" id="system-console-pulse"></span>
+                        </div>
+                        <pre class="console-log" id="system-console-log">Initializing setup console...</pre>
+                    </div>
+                </div>
+
+                <div class="card wide-card status-card hidden" id="system-status-card">
+                    <div class="status-icon success" id="system-status-icon">✓</div>
+                    <h3 id="system-status-title">System Setup Succeeded!</h3>
+                    <p id="system-status-description">All real-time parameters, core isolation, and Wine audio bridges have been configured. Please reboot your machine to apply the kernel parameters.</p>
+                    <button class="status-btn" id="system-status-ok-btn">OK</button>
+                </div>
+
             </section>
         </main>
     </div>

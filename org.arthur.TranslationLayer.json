@@ -13,7 +13,8 @@
     "--filesystem=xdg-run/pipewire-0",
     "--filesystem=host",
     "--share=ipc",
-    "--share=network"
+    "--share=network",
+    "--talk-name=org.freedesktop.Flatpak"
   ],
   "modules": [
     {

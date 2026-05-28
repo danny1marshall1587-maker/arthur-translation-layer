@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     name: Build & Publish Release Assets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
 
@@ -31,7 +31,7 @@ jobs:
             libasound2-dev \
             libpipewire-0.3-dev \
             libspa-0.2-dev \
-            libwebkit2gtk-4.1-dev \
+            libwebkit2gtk-4.0-dev \
             build-essential \
             curl \
             wget \
