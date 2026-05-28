@@ -2,7 +2,6 @@
 
 use serde::{Serialize, Deserialize};
 use std::process::Command;
-use tauri::Manager;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct DspStatus {
