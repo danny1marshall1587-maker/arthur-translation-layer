@@ -62,7 +62,7 @@ jobs:
           # Initialize dummy package.json if not present to enable Tauri CLI compilation
           if [ ! -f "package.json" ]; then
             npm init -y
-            npm install @tauri-apps/cli@1.6.3 @tauri-apps/api@1.6.2
+            npm install @tauri-apps/cli@1.6.3 @tauri-apps/api@1.6.0
           else
             npm install
           fi
