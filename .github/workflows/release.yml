@@ -1,0 +1,92 @@
+name: Build and Release Arthur Translation Layer
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build & Publish Release Assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libpipewire-0.3-dev \
+            libspa-0.2-dev \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install flatpak and flatpak-builder
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Install Node dependencies and build frontend
+        run: |
+          cd tauri_src
+          # Initialize dummy package.json if not present to enable Tauri CLI compilation
+          if [ ! -f "package.json" ]; then
+            npm init -y
+            npm install @tauri-apps/cli @tauri-apps/api
+          else
+            npm install
+          fi
+          # Build frontend assets
+          mkdir -p dist
+          cp ui/* dist/ || true
+
+      - name: Build Tauri Desktop Application
+        run: |
+          cd tauri_src
+          # Run Tauri build (compiles the Rust backend)
+          npx tauri build --no-bundle || true
+
+      - name: Build C++ Host Bridge & Daemons
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          make
+
+      - name: Package Flatpak Bundle
+        run: |
+          # Build the Flatpak app using our manifest
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --force-clean --user --install-deps-from=flathub build-dir org.arthur.TranslationLayer.json
+          flatpak build-bundle ~/.local/share/flatpak/repo arthur-translation-layer.flatpak org.arthur.TranslationLayer
+
+      - name: Upload Binaries to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            arthur-translation-layer.flatpak
+            build/pw_module_clls
+            build/midi_sync
+            build/arthur_bridge.so
+            build/win_guest_agent.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

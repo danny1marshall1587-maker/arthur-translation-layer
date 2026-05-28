@@ -37,8 +37,6 @@ CLAUDE.md
 __pycache__
 .env.local
 .next
-.github
-
 # Scratch binaries and temp files
 scratch/ivshmem_test
 scratch/shm_test_file
