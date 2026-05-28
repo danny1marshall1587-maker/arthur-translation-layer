@@ -1,0 +1,14 @@
+[package]
+name = "arthur-control-center"
+version = "3.0.1"
+description = "Arthur Translation Layer Control Center"
+authors = ["danny1marshall1587-maker"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5" }
+
+[dependencies]
+tauri = { version = "1.6", features = ["api-all"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

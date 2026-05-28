@@ -18,13 +18,13 @@ jobs:
     - name: Install Build Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk
+        sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk libasound2-dev libpipewire-0.3-dev libspa-0.2-dev
 
     - name: Download VST3 Headers
       run: |
-        mkdir -p build/_vst3_headers
-        git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git build/_vst3_headers/pluginterfaces
-        git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git build/_vst3_headers/base
+        mkdir -p vst3_headers
+        git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git vst3_headers/pluginterfaces
+        git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git vst3_headers/base
 
     - name: Configure & Build Bridge (Linux side)
       run: |
@@ -37,7 +37,7 @@ jobs:
         mkdir -p AppDir/usr/lib/arthur
         
         # Copy ONLY the Arthur Linux components
-        cp build/libarthur_bridge.so AppDir/usr/lib/arthur/
+        cp build/arthur_bridge.so AppDir/usr/lib/arthur/
         cp arthur-cli.py AppDir/usr/bin/
         cp arthur.png AppDir/
         cp AppRun AppDir/

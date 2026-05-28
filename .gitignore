@@ -40,3 +40,4 @@ __pycache__
 # Scratch binaries and temp files
 scratch/ivshmem_test
 scratch/shm_test_file
+vst3_headers/

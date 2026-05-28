@@ -34,8 +34,14 @@ fn load_vdc_profile(profile_path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn install_vst_plugin(installer_path: String) -> Result<String, String> {
+    let script_path = if std::path::Path::new("/app/bin/arthur-installer-bridge.sh").exists() {
+        "/app/bin/arthur-installer-bridge.sh"
+    } else {
+        "./arthur-installer-bridge.sh"
+    };
+
     // Invoke our auto-bridging script
-    let output = Command::new("./arthur-installer-bridge.sh")
+    let output = Command::new(script_path)
         .arg(&installer_path)
         .output();
     
@@ -52,6 +58,12 @@ fn install_vst_plugin(installer_path: String) -> Result<String, String> {
 }
 
 fn main() {
-    // Standard Tauri initialization entry point
-    println!("Arthur Control Center Backend Started.");
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            get_dsp_status,
+            load_vdc_profile,
+            install_vst_plugin
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

@@ -17,26 +17,6 @@
   ],
   "modules": [
     {
-      "name": "libasound",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://github.com/alsa-project/alsa-lib.git",
-          "tag": "v1.2.10"
-        }
-      ]
-    },
-    {
-      "name": "pipewire",
-      "sources": [
-        {
-          "type": "git",
-          "url": "https://gitlab.freedesktop.org/pipewire/pipewire.git",
-          "tag": "1.0.0"
-        }
-      ]
-    },
-    {
       "name": "arthur-backend",
       "buildsystem": "simple",
       "build-commands": [
@@ -46,6 +26,18 @@
         {
           "type": "dir",
           "path": "."
+        },
+        {
+          "type": "git",
+          "url": "https://github.com/steinbergmedia/vst3_pluginterfaces.git",
+          "branch": "master",
+          "dest": "vst3_headers/pluginterfaces"
+        },
+        {
+          "type": "git",
+          "url": "https://github.com/steinbergmedia/vst3_base.git",
+          "branch": "master",
+          "dest": "vst3_headers/base"
         }
       ]
     }

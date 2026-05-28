@@ -90,6 +90,9 @@ int main() {
                     pid_t pid = fork();
                     if (pid == 0) {
                         std::string guest_bin = "./build/arthur-guest.exe";
+                        if (access("/app/bin/arthur-guest.exe", F_OK) == 0) {
+                            guest_bin = "/app/bin/arthur-guest.exe";
+                        }
                         execlp("wine", "wine", guest_bin.c_str(), shm_name.c_str(), win_plugin_path.c_str(), NULL);
                         exit(1);
                     } else {

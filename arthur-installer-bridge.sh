@@ -8,6 +8,16 @@ WINEPREFIX_DIR="$HOME/.wine"
 LINUX_VST3_DIR="$HOME/.vst3"
 BRIDGE_SRC_DIR="$(pwd)"
 
+if [ -f "/.flatpak-info" ] || [ -d "/app" ]; then
+    BRIDGE_SO_PATH="/app/lib/arthur_bridge.so"
+else
+    BRIDGE_SO_PATH="$BRIDGE_SRC_DIR/build/arthur_bridge.so"
+    if [ ! -f "$BRIDGE_SO_PATH" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        BRIDGE_SO_PATH="$SCRIPT_DIR/build/arthur_bridge.so"
+    fi
+fi
+
 echo "=== Arthur: Installer Router & Auto-Bridger ==="
 
 # 1. Parse CLI arguments
@@ -73,11 +83,11 @@ for plugin in "${NEW_PLUGINS[@]}"; do
     mkdir -p "$BRIDGE_BUNDLE_DIR"
     
     # Copy host bridge
-    if [ -f "$BRIDGE_SRC_DIR/build/arthur_bridge.so" ]; then
-        cp "$BRIDGE_SRC_DIR/build/arthur_bridge.so" "$BRIDGE_BUNDLE_DIR/$PLUGIN_BASENAME.so"
+    if [ -f "$BRIDGE_SO_PATH" ]; then
+        cp "$BRIDGE_SO_PATH" "$BRIDGE_BUNDLE_DIR/$PLUGIN_BASENAME.so"
         echo "    [OK] Copied Linux bridge to $BRIDGE_BUNDLE_DIR/$PLUGIN_BASENAME.so"
     else
-        echo "    [ERROR] build/arthur_bridge.so not found! Please run make first."
+        echo "    [ERROR] arthur_bridge.so not found at $BRIDGE_SO_PATH! Please run make first."
         exit 1
     fi
     

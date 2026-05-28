@@ -1,0 +1,37 @@
+{
+  "build": {
+    "distDir": "../dist",
+    "devPath": "../ui",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "package": {
+    "productName": "arthur-control-center",
+    "version": "3.0.1"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true
+    },
+    "bundle": {
+      "active": false,
+      "targets": "all",
+      "identifier": "org.arthur.controlcenter",
+      "icon": [
+        "../arthur.png"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "Arthur Control Center",
+        "width": 850,
+        "height": 650,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  }
+}

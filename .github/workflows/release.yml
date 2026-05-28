@@ -39,11 +39,19 @@ jobs:
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            libwine-dev \
+            wine
 
       - name: Install flatpak and flatpak-builder
         run: |
           sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Download VST3 Headers
+        run: |
+          mkdir -p vst3_headers
+          git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git vst3_headers/pluginterfaces
+          git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git vst3_headers/base
 
       - name: Install Node dependencies and build frontend
         run: |
@@ -63,14 +71,27 @@ jobs:
         run: |
           cd tauri_src
           # Run Tauri build (compiles the Rust backend)
-          npx tauri build --no-bundle || true
+          npx tauri build --no-bundle
+          cd ..
+          mkdir -p bin
+          cp tauri_src/src-tauri/target/release/arthur-control-center bin/
 
       - name: Build C++ Host Bridge & Daemons
         run: |
           mkdir -p build
           cd build
           cmake ..
-          make
+          make -j$(nproc)
+
+      - name: Build Wine Guest and Agent Binaries
+        run: |
+          wineg++ -O2 -I. guest.cpp -o build/arthur-guest.exe -lpthread
+          wineg++ -O2 -I. -Ivst3_headers win_guest_agent.cpp vstiids.cpp -o build/win_guest_agent.exe -lpthread
+          mkdir -p bin
+          cp build/arthur-guest.exe bin/
+          cp build/arthur-guest.exe.so bin/
+          cp build/win_guest_agent.exe bin/
+          cp build/win_guest_agent.exe.so bin/
 
       - name: Package Flatpak Bundle
         run: |
@@ -87,6 +108,10 @@ jobs:
             build/pw_module_clls
             build/midi_sync
             build/arthur_bridge.so
+            build/arthur-daemon
             build/win_guest_agent.exe
+            build/win_guest_agent.exe.so
+            build/arthur-guest.exe
+            build/arthur-guest.exe.so
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
