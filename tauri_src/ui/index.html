@@ -96,6 +96,198 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Install Plugins Tab -->
+            <section id="plugins-tab" class="tab-content">
+                <header>
+                    <h1>Drag & Drop VST3 Installer</h1>
+                    <p>Install Windows .exe or .msi plugin installers directly into the Arthur Translation Layer.</p>
+                </header>
+                
+                <div class="card wide-card drop-zone" id="drop-zone">
+                    <div class="drop-zone-content">
+                        <div class="upload-icon">📥</div>
+                        <h3>Drag & Drop Installer here</h3>
+                        <p>Supports Windows .exe and .msi installer packages</p>
+                        <span>or</span>
+                        <br>
+                        <button class="select-file-btn" id="select-file-btn">Choose Installer File</button>
+                    </div>
+                </div>
+
+                <div class="card wide-card install-progress-card hidden" id="install-progress-card">
+                    <h3 id="install-title">Installing Plugin...</h3>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-status">
+                            <span id="progress-percent">0%</span>
+                            <span id="progress-text">Starting Wine sandbox environment...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="installer-console">
+                        <div class="console-header">
+                            <span>INSTALLATION CONSOLE LOG</span>
+                            <span class="pulse-dot green" id="console-pulse"></span>
+                        </div>
+                        <pre class="console-log" id="console-log">Initializing Wine bottle (WINEPREFIX)...
+Executing installer binary inside virtualization layer...</pre>
+                    </div>
+                </div>
+
+                <div class="card wide-card status-card hidden" id="status-card">
+                    <div class="status-icon success" id="status-icon">✓</div>
+                    <h3 id="status-title">Installation Succeeded!</h3>
+                    <p id="status-description">The plugin was successfully bridged and is now available in your host DAW.</p>
+                    <button class="status-btn" id="status-ok-btn">OK</button>
+                </div>
+            </section>
+
+            <!-- Virtual DSP Rack Tab -->
+            <section id="rack-tab" class="tab-content">
+                <header>
+                    <h1>Virtual DSP Cores (VDC) Rack</h1>
+                    <p>Pre-load plugins into system memory slots locked on isolated real-time CPU cores.</p>
+                </header>
+                
+                <div class="profile-header">
+                    <div class="profile-select-container">
+                        <label for="profile-select">VDC DSP Profile:</label>
+                        <select id="profile-select" class="custom-select">
+                            <option value="tracking">Tracking_Session.vdcp</option>
+                            <option value="mixing">Mixdown_Mastering.vdcp</option>
+                            <option value="empty">Create Empty Profile...</option>
+                        </select>
+                    </div>
+                    <button class="action-btn" id="save-profile-btn">Save Rack Configuration</button>
+                </div>
+
+                <div class="rack-grid">
+                    <!-- Channel 1 -->
+                    <div class="rack-channel">
+                        <div class="channel-header">CH 1 INSERTS</div>
+                        <div class="rack-slot filled">
+                            <span class="slot-number">1</span>
+                            <span class="slot-plugin">FabFilter Pro-Q 3</span>
+                            <span class="slot-action">✖</span>
+                        </div>
+                        <div class="rack-slot filled">
+                            <span class="slot-number">2</span>
+                            <span class="slot-plugin">Universal Audio 1176LN</span>
+                            <span class="slot-action">✖</span>
+                        </div>
+                        <div class="rack-slot empty">
+                            <span class="slot-number">3</span>
+                            <span class="slot-placeholder">+ Add VST3 Insert</span>
+                        </div>
+                    </div>
+                    <!-- Channel 2 -->
+                    <div class="rack-channel">
+                        <div class="channel-header">CH 2 INSERTS</div>
+                        <div class="rack-slot filled">
+                            <span class="slot-number">1</span>
+                            <span class="slot-plugin">SSL Channel Strip</span>
+                            <span class="slot-action">✖</span>
+                        </div>
+                        <div class="rack-slot empty">
+                            <span class="slot-number">2</span>
+                            <span class="slot-placeholder">+ Add VST3 Insert</span>
+                        </div>
+                        <div class="rack-slot empty">
+                            <span class="slot-number">3</span>
+                            <span class="slot-placeholder">+ Add VST3 Insert</span>
+                        </div>
+                    </div>
+                    <!-- Channel 3 -->
+                    <div class="rack-channel">
+                        <div class="channel-header">CH 3 INSERTS</div>
+                        <div class="rack-slot filled">
+                            <span class="slot-number">1</span>
+                            <span class="slot-plugin">Teletronix LA-2A</span>
+                            <span class="slot-action">✖</span>
+                        </div>
+                        <div class="rack-slot empty">
+                            <span class="slot-number">2</span>
+                            <span class="slot-placeholder">+ Add VST3 Insert</span>
+                        </div>
+                        <div class="rack-slot empty">
+                            <span class="slot-number">3</span>
+                            <span class="slot-placeholder">+ Add VST3 Insert</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Audio Setup Tab -->
+            <section id="settings-tab" class="tab-content">
+                <header>
+                    <h1>Audio Setup & System Tuner</h1>
+                    <p>Configure PipeWire backend latency and lock kernel parameters for core isolation.</p>
+                </header>
+                
+                <div class="grid-layout">
+                    <div class="card">
+                        <h3>PipeWire Settings</h3>
+                        <div class="setting-item">
+                            <label>Audio Interface</label>
+                            <select class="custom-select">
+                                <option>Focusrite Scarlett 18i20 (USB Audio)</option>
+                                <option>Universal Audio Volt 4 (USB Audio)</option>
+                                <option>Intel HD Audio (Internal)</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label>Sample Rate</label>
+                            <select class="custom-select">
+                                <option>48,000 Hz</option>
+                                <option>44,100 Hz</option>
+                                <option>96,000 Hz</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label>Buffer Size (Quantum)</label>
+                            <select class="custom-select">
+                                <option>128 samples (2.7 ms)</option>
+                                <option>64 samples (1.3 ms)</option>
+                                <option>256 samples (5.3 ms)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>CLLS & MIDI Timings</h3>
+                        <div class="setting-item">
+                            <label>CLLS Calibration Channel</label>
+                            <select class="custom-select">
+                                <option>Channel 8 (Loopback Return)</option>
+                                <option>Channel 2 (Stereo Out L)</option>
+                                <option>Channel 4 (Stereo Out R)</option>
+                            </select>
+                        </div>
+                        <div class="setting-item checkbox-item">
+                            <input type="checkbox" id="midi-slave-check" checked>
+                            <label for="midi-slave-check">Slave ALSA Sequencer to Audio PCM clock</label>
+                        </div>
+                        <button class="settings-btn" id="run-clls-calibration">Calibrate CLLS Latency</button>
+                    </div>
+                </div>
+
+                <div class="card wide-card">
+                    <h3>Virtual DSP Core Partitioning</h3>
+                    <p class="description">Allocate isolated CPU cores to run host translation plugins exclusively. Isolating cores shields the audio process from scheduler interrupts.</p>
+                    <div class="slider-container">
+                        <div class="slider-labels">
+                            <span>Standard OS Processes (Cores 0-3)</span>
+                            <span>Dedicated DSP cores (Cores 4-7)</span>
+                        </div>
+                        <input type="range" class="core-slider" min="1" max="7" value="4" id="core-slider">
+                        <div class="slider-status" id="slider-status">Allocating Cores 4-7 to Virtual DSP (4 Cores isolated)</div>
+                    </div>
+                    <button class="action-btn" id="apply-isolation-btn">Apply Core Isolation & Tune System</button>
+                </div>
+            </section>
         </main>
     </div>
     <script src="main.js"></script>

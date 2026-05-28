@@ -321,3 +321,433 @@ header p {
 .latency-graph .bar:hover {
     opacity: 0.8;
 }
+
+/* Tab visibility rules */
+.tab-content {
+    display: none;
+    animation: fadeIn 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Drop Zone Styles */
+.drop-zone {
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.01);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 40px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 20px;
+    border-radius: 16px;
+    transition: all 0.3s ease;
+}
+
+.drop-zone.dragover {
+    border-color: var(--accent-blue);
+    background: rgba(0, 122, 255, 0.05);
+    box-shadow: 0 0 20px rgba(0, 122, 255, 0.15);
+}
+
+.drop-zone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.1));
+}
+
+.drop-zone-content h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0;
+}
+
+.drop-zone-content p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.drop-zone-content span {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
+.select-file-btn {
+    padding: 10px 24px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.select-file-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Progress Section Styles */
+.install-progress-card {
+    margin-bottom: 20px;
+}
+
+.progress-container {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--accent-blue), var(--accent-green));
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+.progress-status {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+#progress-percent {
+    color: var(--accent-green);
+}
+
+#progress-text {
+    color: var(--text-secondary);
+}
+
+/* Installer Terminal Console */
+.installer-console {
+    background: rgba(5, 7, 15, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.console-header {
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+}
+
+.console-log {
+    padding: 16px;
+    font-family: 'Monospace', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #4af626;
+    height: 180px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Status Cards */
+.status-card {
+    text-align: center;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2rem;
+    font-weight: 800;
+}
+
+.status-icon.success {
+    background: rgba(48, 209, 88, 0.15);
+    color: var(--accent-green);
+    border: 2px solid rgba(48, 209, 88, 0.3);
+    box-shadow: 0 0 20px rgba(48, 209, 88, 0.15);
+}
+
+.status-icon.error {
+    background: rgba(255, 69, 58, 0.15);
+    color: #ff453a;
+    border: 2px solid rgba(255, 69, 58, 0.3);
+    box-shadow: 0 0 20px rgba(255, 69, 58, 0.15);
+}
+
+.status-btn {
+    padding: 10px 30px;
+    background: var(--accent-blue);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.status-btn:hover {
+    background: #0066cc;
+    box-shadow: 0 0 15px rgba(0, 122, 255, 0.4);
+}
+
+/* Rack Styles */
+.profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px 24px;
+}
+
+.profile-select-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.profile-select-container label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.custom-select {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.action-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 0 15px rgba(175, 82, 222, 0.4);
+}
+
+.rack-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.rack-channel {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.channel-header {
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 8px;
+}
+
+.rack-slot {
+    height: 48px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.rack-slot.filled {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-weight: 600;
+}
+
+.rack-slot.filled:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.slot-number {
+    width: 20px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.slot-plugin {
+    flex-grow: 1;
+}
+
+.slot-action {
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 0.75rem;
+}
+
+.slot-action:hover {
+    color: #ff453a;
+}
+
+.rack-slot.empty {
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    justify-content: center;
+    cursor: pointer;
+}
+
+.rack-slot.empty:hover {
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+    background: rgba(0, 122, 255, 0.03);
+}
+
+/* Audio Setup Styles */
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.setting-item label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.checkbox-item {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.checkbox-item input {
+    width: 16px;
+    height: 16px;
+}
+
+.settings-btn {
+    width: 100%;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+}
+
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Core Slider Partition Styles */
+.description {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+.slider-container {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.core-slider {
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.slider-status {
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+}
+
+/* Global utility classes */
+.hidden {
+    display: none !important;
+}
