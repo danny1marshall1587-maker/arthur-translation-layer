@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arthur Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo">A</div>
+                <h2>ARTHUR</h2>
+            </div>
+            <nav>
+                <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+                <button class="nav-btn" data-tab="plugins">Install Plugins</button>
+                <button class="nav-btn" data-tab="rack">Virtual DSP Rack</button>
+                <button class="nav-btn" data-tab="settings">Audio Setup</button>
+            </nav>
+            <div class="status-indicator">
+                <span class="pulse-dot green"></span>
+                <span>System phase-locked</span>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="content-area">
+            <!-- Dashboard Tab -->
+            <section id="dashboard-tab" class="tab-content active">
+                <header>
+                    <h1>Studio OS Dashboard</h1>
+                    <p>Dynamic monitoring of translation and clock alignment layers.</p>
+                </header>
+
+                <div class="grid-layout">
+                    <!-- Virtual DSP Card -->
+                    <div class="card dsp-card">
+                        <h3>Virtual DSP Cores (VDC)</h3>
+                        <div class="status-badge active">Active</div>
+                        <div class="core-info">
+                            <span class="label">Dedicated Cores:</span>
+                            <span class="value">4-7 (Intel Core i7)</span>
+                        </div>
+                        <div class="meter-container">
+                            <div class="meter-label">
+                                <span>DSP Load</span>
+                                <span>64.2%</span>
+                            </div>
+                            <div class="meter-bar">
+                                <div class="meter-fill" style="width: 64.2%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CLLS Card -->
+                    <div class="card clls-card">
+                        <h3>Closed-Loop Latency Sync</h3>
+                        <div class="status-badge locked">Locked</div>
+                        <div class="stat-row">
+                            <span class="label">Hardware RTT:</span>
+                            <span class="value">5.048 ms (242.3 samples)</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="label">CLLS Correction:</span>
+                            <span class="value">+0.285 ms (+13.6 samples)</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="label">Phase Jitter:</span>
+                            <span class="value">±416 ns (±0.02 samples)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MIDI Timing Card -->
+                <div class="card wide-card">
+                    <h3>ALSA MIDI Clock Alignment</h3>
+                    <div class="midi-status">
+                        <span class="status-text">Slaved to PCM hardware clock (hw:0,0)</span>
+                        <span class="jitter-value">Jitter: &lt; 10 &mu;s</span>
+                    </div>
+                    <div class="latency-graph">
+                        <div class="bar" style="height: 40%"></div>
+                        <div class="bar" style="height: 45%"></div>
+                        <div class="bar" style="height: 38%"></div>
+                        <div class="bar" style="height: 42%"></div>
+                        <div class="bar" style="height: 48%"></div>
+                        <div class="bar" style="height: 52%"></div>
+                        <div class="bar" style="height: 44%"></div>
+                        <div class="bar" style="height: 40%"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>

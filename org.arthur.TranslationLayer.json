@@ -1,0 +1,53 @@
+{
+  "app-id": "org.arthur.TranslationLayer",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "23.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "arthur-control-center",
+  "finish-args": [
+    "--socket=wayland",
+    "--socket=x11",
+    "--device=dri",
+    "--device=kvm",
+    "--socket=pulseaudio",
+    "--filesystem=xdg-run/pipewire-0",
+    "--filesystem=host",
+    "--share=ipc",
+    "--share=network"
+  ],
+  "modules": [
+    {
+      "name": "libasound",
+      "sources": [
+        {
+          "type": "git",
+          "url": "https://github.com/alsa-project/alsa-lib.git",
+          "tag": "v1.2.10"
+        }
+      ]
+    },
+    {
+      "name": "pipewire",
+      "sources": [
+        {
+          "type": "git",
+          "url": "https://gitlab.freedesktop.org/pipewire/pipewire.git",
+          "tag": "1.0.0"
+        }
+      ]
+    },
+    {
+      "name": "arthur-backend",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p build && cd build && cmake .. && make && make install"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "."
+        }
+      ]
+    }
+  ]
+}

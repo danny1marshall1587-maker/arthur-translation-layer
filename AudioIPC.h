@@ -2,11 +2,15 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string>
+#include <cstring>
+#include <algorithm>
+
+#ifndef _WIN32
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <string>
-#include <cstring>
+#endif
 
 namespace arthur {
 
@@ -53,8 +57,9 @@ struct AudioSharedMemory {
     ShmMidiEvent midi_out[256];
 };
 
+#ifndef _WIN32
 /**
- * Helper to manage the SHM lifecycle.
+ * Helper to manage the SHM lifecycle on Linux.
  */
 class AudioTransport {
 public:
@@ -120,5 +125,6 @@ private:
     int fd_;
     std::string name_;
 };
+#endif
 
 } // namespace arthur

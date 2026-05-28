@@ -10,7 +10,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include "ipc/shm_buffer.h"
+#include "AudioIPC.h"
+#include <iostream>
 
 #ifndef SMTG_EXPORT_SYMBOL
 #define SMTG_EXPORT_SYMBOL __attribute__ ((visibility ("default")))
@@ -83,7 +84,7 @@ private:
 
 class SimpleProcessor : public Vst::IAudioProcessor {
 public:
-    SimpleProcessor() : ref_count(1), shm(nullptr) {}
+    SimpleProcessor() : ref_count(1), layout(nullptr) {}
     tresult PLUGIN_API queryInterface(const TUID _iid, void** obj) override {
         if (memcmp(_iid, Vst::IAudioProcessor::iid, 16) == 0 || memcmp(_iid, FUnknown::iid, 16) == 0) {
             *obj = (Vst::IAudioProcessor*)this; addRef(); return kResultOk;
@@ -107,38 +108,53 @@ public:
     }
 
     tresult PLUGIN_API process(Vst::ProcessData& data) override {
-        if (!shm || !shm->isValid()) return kResultOk;
+        if (!layout) return kResultOk;
         
-        auto* layout = shm->get();
-        layout->header.sampleRate = (uint32_t)this->sampleRate;
-        layout->header.bufferSize = (uint32_t)data.numSamples;
-        layout->header.channels = 2;
+        layout->sample_rate = this->sampleRate;
+        layout->sample_count = (uint32_t)data.numSamples;
+        layout->num_inputs = 0;
+        layout->num_outputs = 0;
 
         // Copy input to SHM
         if (data.numInputs > 0 && data.inputs[0].numChannels > 0) {
-            for (int c = 0; c < std::min(2, (int)data.inputs[0].numChannels); ++c) {
-                memcpy(layout->input[c], data.inputs[0].channelBuffers32[c], data.numSamples * sizeof(float));
+            layout->num_inputs = std::min((uint32_t)data.inputs[0].numChannels, arthur::SHM_MAX_CHANNELS);
+            for (uint32_t c = 0; c < layout->num_inputs; ++c) {
+                uint32_t samples_to_copy = std::min((uint32_t)data.numSamples, arthur::SHM_MAX_SAMPLES);
+                memcpy(layout->input_buffers[c], data.inputs[0].channelBuffers32[c], samples_to_copy * sizeof(float));
             }
         }
 
+        if (data.numOutputs > 0 && data.outputs[0].numChannels > 0) {
+            layout->num_outputs = std::min((uint32_t)data.outputs[0].numChannels, arthur::SHM_MAX_CHANNELS);
+        }
+
         // Trigger Guest
-        layout->header.hostReady.store(true);
+        layout->state.store(arthur::TransportState::STATE_HOST_WRITTEN, std::memory_order_release);
         
         // Busy wait for Guest (with timeout)
-        int timeout = 10000;
-        while (!layout->header.guestReady.load() && --timeout > 0) {
+        int timeout = 100000;
+        while (layout->state.load(std::memory_order_acquire) != arthur::TransportState::STATE_GUEST_PROCESSED && --timeout > 0) {
+            #if defined(__x86_64__) || defined(_M_X64)
             asm volatile("pause" ::: "memory");
+            #endif
+        }
+
+        if (timeout == 0) {
+            // Guest timed out, bypass processing to avoid crash
+            layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_release);
+            return kResultOk;
         }
 
         // Copy output from SHM
         if (data.numOutputs > 0 && data.outputs[0].numChannels > 0) {
-            for (int c = 0; c < std::min(2, (int)data.outputs[0].numChannels); ++c) {
-                memcpy(data.outputs[0].channelBuffers32[c], layout->output[c], data.numSamples * sizeof(float));
+            for (uint32_t c = 0; c < layout->num_outputs; ++c) {
+                uint32_t samples_to_copy = std::min((uint32_t)data.numSamples, arthur::SHM_MAX_SAMPLES);
+                memcpy(data.outputs[0].channelBuffers32[c], layout->output_buffers[c], samples_to_copy * sizeof(float));
             }
         }
 
-        layout->header.hostReady.store(false);
-        layout->header.guestReady.store(false);
+        // Release control back to IDLE
+        layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_release);
 
         return kResultOk;
     }
@@ -147,11 +163,20 @@ public:
 
 private:
     void connectToDaemon() {
-        if (shm) return;
+        if (layout) return;
         
-        std::string shm_name = "/arthur_" + std::string(g_plugin_name);
-        shm = new Arthur::ShmBuffer(shm_name, true);
+        std::string shm_name = "arthur_" + std::string(g_plugin_name);
         
+        // Create the shared memory transport
+        if (!shm_transport.create(shm_name)) {
+            std::cerr << "[ERROR] Arthur Host failed to create shared memory: " << shm_name << std::endl;
+            return;
+        }
+        
+        layout = shm_transport.get();
+        if (!layout) return;
+
+        // Notify daemon to spawn the guest for this plugin
         int sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if (sock != -1) {
             struct sockaddr_un addr;
@@ -169,7 +194,8 @@ private:
     uint32 ref_count;
     double sampleRate;
     int32 maxSamplesPerBlock;
-    Arthur::ShmBuffer* shm;
+    arthur::AudioTransport shm_transport;
+    arthur::AudioSharedMemory* layout;
 };
 
 class SimpleFactory : public IPluginFactory2 {
