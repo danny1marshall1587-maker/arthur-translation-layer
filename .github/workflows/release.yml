@@ -98,6 +98,8 @@ jobs:
 
       - name: Package Flatpak Bundle
         run: |
+          # Clean CMake cache to prevent directory mismatch errors inside Flatpak sandbox
+          rm -rf build/CMakeCache.txt build/CMakeFiles
           # Build the Flatpak app using our manifest
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak-builder --force-clean --user --install-deps-from=flathub build-dir org.arthur.TranslationLayer.json
