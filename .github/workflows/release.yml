@@ -56,10 +56,13 @@ jobs:
       - name: Install Node dependencies and build frontend
         run: |
           cd tauri_src
+          # Clean conflicting global cargo-tauri binaries from path
+          rm -f /home/runner/.cargo/bin/cargo-tauri || true
+          rm -f /home/runner/.cargo/bin/tauri || true
           # Initialize dummy package.json if not present to enable Tauri CLI compilation
           if [ ! -f "package.json" ]; then
             npm init -y
-            npm install @tauri-apps/cli@^1 @tauri-apps/api@^1
+            npm install @tauri-apps/cli@1.6.3 @tauri-apps/api@1.6.2
           else
             npm install
           fi
