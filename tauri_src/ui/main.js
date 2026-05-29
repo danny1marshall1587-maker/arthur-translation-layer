@@ -733,11 +733,45 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!addVstModal) return;
 
-        vstPathInput.value = "";
+        vstPathInput.innerHTML = '<option value="">Querying VST3s...</option>';
         inputSelect.innerHTML = '<option value="">Querying ports...</option>';
         outputSelect.innerHTML = '<option value="">Querying ports...</option>';
 
         addVstModal.classList.remove("hidden");
+
+        // Load VSTs
+        if (window.__TAURI__) {
+            window.__TAURI__.core.invoke("get_installed_vst3_plugins")
+                .then(plugins => {
+                    vstPathInput.innerHTML = "";
+                    if (plugins.length === 0) {
+                        const opt = document.createElement("option");
+                        opt.value = "";
+                        opt.textContent = "No VST3 plugins bridged yet";
+                        vstPathInput.appendChild(opt);
+                    } else {
+                        plugins.forEach(plugin => {
+                            const opt = document.createElement("option");
+                            opt.value = plugin;
+                            opt.textContent = plugin;
+                            vstPathInput.appendChild(opt);
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error("Error loading VST3 plugins:", err);
+                    vstPathInput.innerHTML = '<option value="">Error loading VST3s</option>';
+                });
+        } else {
+            const simulatedVsts = ["CyberDenoiserPro", "THE MIDS ROOM", "Strobe Poly Tuner", "Galaxy Sync", "AnalogFx", "lsp-plugins", "Galaxy Strobe Tune"];
+            vstPathInput.innerHTML = "";
+            simulatedVsts.forEach(plugin => {
+                const opt = document.createElement("option");
+                opt.value = plugin;
+                opt.textContent = plugin;
+                vstPathInput.appendChild(opt);
+            });
+        }
 
         if (window.__TAURI__) {
             window.__TAURI__.core.invoke("get_pipewire_ports")
@@ -806,12 +840,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (confirmBtn) {
         confirmBtn.addEventListener("click", () => {
-            const vstPathVal = document.getElementById("modal-vst-path").value.trim();
+            const vstPathVal = document.getElementById("modal-vst-path").value;
             const inputVal = document.getElementById("modal-input-source").value;
             const outputVal = document.getElementById("modal-output-dest").value;
 
             if (!vstPathVal) {
-                alert("Please enter a VST3 plugin name or path.");
+                alert("Please select a VST3 plugin. If none are listed, install them first.");
                 return;
             }
 

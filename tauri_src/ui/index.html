@@ -278,8 +278,10 @@ Executing installer binary inside virtualization layer...</pre>
                 <p>Insert a VST3 plugin into the Virtual DSP Core slot.</p>
             </header>
             <div class="setting-item">
-                <label for="modal-vst-path">VST3 Plugin Name / DLL Path</label>
-                <input type="text" id="modal-vst-path" class="custom-input" placeholder="e.g. FabFilter Pro-Q 3">
+                <label for="modal-vst-path">VST3 Plugin</label>
+                <select id="modal-vst-path" class="custom-select" style="width: 100%;">
+                    <!-- Populated dynamically with installed plugins -->
+                </select>
             </div>
             <div class="setting-item">
                 <label for="modal-input-source">Input Source (PipeWire Port)</label>

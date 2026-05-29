@@ -1,6 +1,6 @@
 [package]
 name = "arthur-control-center"
-version = "3.2.0"
+version = "3.2.1"
 description = "Arthur Translation Layer Control Center"
 authors = ["danny1marshall1587-maker"]
 edition = "2021"

@@ -305,6 +305,47 @@ fn get_profiles_dir() -> Result<std::path::PathBuf, String> {
     Ok(path)
 }
 
+fn get_installed_plugins_list() -> Vec<String> {
+    let mut list = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        let vst3_path = std::path::PathBuf::from(home).join(".vst3");
+        if vst3_path.exists() {
+            fn scan_dir(dir: &std::path::Path, list: &mut Vec<String>) {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            if path.is_dir() || path.is_file() {
+                                if let Some(ext) = path.extension() {
+                                    if ext == "vst3" {
+                                        if let Some(stem) = path.file_stem() {
+                                            let name = stem.to_string_lossy().to_string();
+                                            if !list.contains(&name) {
+                                                list.push(name);
+                                            }
+                                        }
+                                    }
+                                }
+                                if path.is_dir() {
+                                    scan_dir(&path, list);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            scan_dir(&vst3_path, &mut list);
+        }
+    }
+    list.sort();
+    list
+}
+
+#[tauri::command]
+fn get_installed_vst3_plugins() -> Result<Vec<String>, String> {
+    Ok(get_installed_plugins_list())
+}
+
 #[tauri::command]
 fn get_vdc_profiles() -> Result<Vec<String>, String> {
     let dir = get_profiles_dir()?;
@@ -323,53 +364,80 @@ fn get_vdc_profiles() -> Result<Vec<String>, String> {
     }
     
     if profiles.is_empty() {
+        let installed = get_installed_plugins_list();
+        let mut slots_tracking = Vec::new();
+        let mut slots_mixing = Vec::new();
+
+        if !installed.is_empty() {
+            slots_tracking.push(VdcSlot {
+                slot_id: 1,
+                channel_name: "CH 1 INSERTS".to_string(),
+                vst3_dll_path: installed[0].clone(),
+                active: true,
+                input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0".to_string(),
+                output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0".to_string(),
+            });
+            if installed.len() > 1 {
+                slots_tracking.push(VdcSlot {
+                    slot_id: 2,
+                    channel_name: "CH 1 INSERTS".to_string(),
+                    vst3_dll_path: installed[1].clone(),
+                    active: true,
+                    input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0".to_string(),
+                    output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0".to_string(),
+                });
+            }
+            if installed.len() > 2 {
+                slots_tracking.push(VdcSlot {
+                    slot_id: 1,
+                    channel_name: "CH 2 INSERTS".to_string(),
+                    vst3_dll_path: installed[2].clone(),
+                    active: true,
+                    input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX1".to_string(),
+                    output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX1".to_string(),
+                });
+            }
+            let mixing_idx = if installed.len() > 3 { 3 } else { 0 };
+            slots_mixing.push(VdcSlot {
+                slot_id: 1,
+                channel_name: "CH 3 INSERTS".to_string(),
+                vst3_dll_path: installed[mixing_idx].clone(),
+                active: true,
+                input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX2".to_string(),
+                output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX2".to_string(),
+            });
+        } else {
+            slots_tracking.push(VdcSlot {
+                slot_id: 1,
+                channel_name: "CH 1 INSERTS".to_string(),
+                vst3_dll_path: "No Plugins Found".to_string(),
+                active: false,
+                input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0".to_string(),
+                output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0".to_string(),
+            });
+            slots_mixing.push(VdcSlot {
+                slot_id: 1,
+                channel_name: "CH 3 INSERTS".to_string(),
+                vst3_dll_path: "No Plugins Found".to_string(),
+                active: false,
+                input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX2".to_string(),
+                output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX2".to_string(),
+            });
+        }
+
         let tracking = VdcProfile {
             profile_name: "Tracking_Session".to_string(),
             cores_allocated: "4-7".to_string(),
             sample_rate: 48000,
             buffer_size: 128,
-            slots: vec![
-                VdcSlot {
-                    slot_id: 1,
-                    channel_name: "CH 1 INSERTS".to_string(),
-                    vst3_dll_path: "FabFilter Pro-Q 3".to_string(),
-                    active: true,
-                    input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0".to_string(),
-                    output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0".to_string(),
-                },
-                VdcSlot {
-                    slot_id: 2,
-                    channel_name: "CH 1 INSERTS".to_string(),
-                    vst3_dll_path: "Universal Audio 1176LN".to_string(),
-                    active: true,
-                    input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0".to_string(),
-                    output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0".to_string(),
-                },
-                VdcSlot {
-                    slot_id: 1,
-                    channel_name: "CH 2 INSERTS".to_string(),
-                    vst3_dll_path: "SSL Channel Strip".to_string(),
-                    active: true,
-                    input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX1".to_string(),
-                    output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX1".to_string(),
-                }
-            ]
+            slots: slots_tracking,
         };
         let mixing = VdcProfile {
             profile_name: "Mixdown_Mastering".to_string(),
             cores_allocated: "4-7".to_string(),
             sample_rate: 96000,
             buffer_size: 256,
-            slots: vec![
-                VdcSlot {
-                    slot_id: 1,
-                    channel_name: "CH 3 INSERTS".to_string(),
-                    vst3_dll_path: "Teletronix LA-2A".to_string(),
-                    active: true,
-                    input_source: "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX2".to_string(),
-                    output_destination: "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX2".to_string(),
-                }
-            ]
+            slots: slots_mixing,
         };
         
         let _ = save_vdc_profile(tracking);
@@ -698,6 +766,9 @@ fn run_system_tuning(window: tauri::Window, cores: String) -> Result<String, Str
 }
 
 fn main() {
+    // Force X11 backend for GDK to avoid WebKitGTK Wayland protocol error 71 crashes
+    std::env::set_var("GDK_BACKEND", "x11");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -710,7 +781,8 @@ fn main() {
             get_pipewire_ports,
             run_clls_calibration,
             install_vst_plugin,
-            run_system_tuning
+            run_system_tuning,
+            get_installed_vst3_plugins
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
