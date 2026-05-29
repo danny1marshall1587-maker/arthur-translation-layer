@@ -100,10 +100,10 @@ jobs:
         run: |
           # Clean CMake cache to prevent directory mismatch errors inside Flatpak sandbox
           rm -rf build/CMakeCache.txt build/CMakeFiles
-          # Build the Flatpak app using our manifest
+          # Build the Flatpak app using our manifest and export to a local repo directory
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak-builder --force-clean --user --install-deps-from=flathub build-dir org.arthur.TranslationLayer.json
-          flatpak build-bundle ~/.local/share/flatpak/repo arthur-translation-layer.flatpak org.arthur.TranslationLayer
+          flatpak-builder --force-clean --repo=repo --user --install-deps-from=flathub build-dir org.arthur.TranslationLayer.json
+          flatpak build-bundle repo arthur-translation-layer.flatpak org.arthur.TranslationLayer
 
       - name: Upload Binaries to Release
         uses: softprops/action-gh-release@v2
