@@ -72,9 +72,10 @@ private slots:
     // Audio Settings
     void loadAudioConfig();
     void applyAudioConfig();
-    void startCllsCalibration();
-    void readCllsOutput();
-    void handleCllsFinished();
+    void startCllsCalibration(int slotIdx);
+    void readCllsOutput(int slotIdx);
+    void handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitStatus status);
+    void populatePortsForSlot(int slotIdx);
 
     // Virtual DSP Rack
     void loadVdcProfiles();
@@ -98,6 +99,7 @@ private slots:
 private:
     void initUi();
     void setupGlobalStylesheet();
+    void ensureDaemonRunning();
     void loadProfile(const QString &name);
     QList<QString> scanInstalledVst3Plugins();
     QList<QString> queryPipeWirePorts();
@@ -139,11 +141,24 @@ private:
     QComboBox *m_audioInterfaceSelect;
     QComboBox *m_sampleRateSelect;
     QComboBox *m_bufferSizeSelect;
-    QComboBox *m_cllsChannelSelect;
     QCheckBox *m_midiSlaveCheck;
     QSlider *m_coresSlider;
     QLabel *m_coresStatusLabel;
-    QPushButton *m_runCllsBtn;
+
+    // CLLS Slots for 3 Audio Interfaces to Sync
+    struct CllsSlot {
+        QProcess *process = nullptr;
+        QComboBox *interfaceSelect = nullptr;
+        QComboBox *playbackPortSelect = nullptr;
+        QComboBox *capturePortSelect = nullptr;
+        QPushButton *runBtn = nullptr;
+        QLabel *statusBadge = nullptr;
+        QLabel *rttValLabel = nullptr;
+        QLabel *offsetValLabel = nullptr;
+        QLabel *jitterValLabel = nullptr;
+        bool isCalibrating = false;
+    };
+    CllsSlot m_cllsSlots[3];
 
     // Installer Wizard UI
     DropZoneWidget *m_dropZone;
@@ -170,7 +185,6 @@ private:
     QWidget *m_rackGridWidget;
 
     // Background System Processes
-    QProcess *m_cllsProcess;
     QProcess *m_installerProcess;
     QProcess *m_tuningProcess;
     QTimer *m_statusTimer;

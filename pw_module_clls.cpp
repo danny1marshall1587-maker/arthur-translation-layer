@@ -263,7 +263,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    data.filter = pw_filter_new(core, "CLLS-Aligner", NULL);
+    const char *filter_name = (argc > 1) ? argv[1] : "CLLS-Aligner";
+    data.filter = pw_filter_new(core, filter_name, NULL);
     if (!data.filter) {
         std::cerr << "Failed to create PipeWire filter client!" << std::endl;
         pw_core_disconnect(core);

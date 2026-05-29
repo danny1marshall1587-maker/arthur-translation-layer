@@ -61,10 +61,10 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , m_activeSampleRate(48000)
     , m_isUpdatingConfig(false)
-    , m_cllsProcess(nullptr)
     , m_installerProcess(nullptr)
     , m_tuningProcess(nullptr)
 {
+    ensureDaemonRunning();
     initUi();
     setupGlobalStylesheet();
 
@@ -79,9 +79,11 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    if (m_cllsProcess) {
-        m_cllsProcess->kill();
-        m_cllsProcess->waitForFinished(500);
+    for (int i = 0; i < 3; ++i) {
+        if (m_cllsSlots[i].process) {
+            m_cllsSlots[i].process->kill();
+            m_cllsSlots[i].process->waitForFinished(500);
+        }
     }
     if (m_installerProcess) {
         m_installerProcess->kill();
@@ -99,7 +101,7 @@ void MainWindow::setupGlobalStylesheet() {
         QWidget {
             color: #f0f2f5;
             font-family: 'Outfit', sans-serif;
-            font-size: 14px;
+            font-size: 13px;
         }
         /* Sidebar Styling */
         #sidebar {
@@ -118,8 +120,9 @@ void MainWindow::setupGlobalStylesheet() {
             border-left: 3px solid transparent;
             color: #a0a5b5;
             text-align: left;
-            padding: 12px 20px;
+            padding: 8px 12px;
             font-weight: 600;
+            font-size: 13px;
             border-radius: 4px;
         }
         .navBtn:hover {
@@ -143,7 +146,7 @@ void MainWindow::setupGlobalStylesheet() {
         .cardTitle {
             font-weight: 600;
             color: #a0a5b5;
-            font-size: 15px;
+            font-size: 14px;
         }
         /* Badges */
         .badge {
@@ -172,7 +175,7 @@ void MainWindow::setupGlobalStylesheet() {
             background-color: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
-            padding: 8px 12px;
+            padding: 5px 10px;
             color: #f0f2f5;
         }
         .custom-select QAbstractItemView {
@@ -185,7 +188,7 @@ void MainWindow::setupGlobalStylesheet() {
             background-color: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
-            padding: 8px 12px;
+            padding: 5px 10px;
             color: #f0f2f5;
         }
         /* Buttons */
@@ -195,7 +198,7 @@ void MainWindow::setupGlobalStylesheet() {
             border-radius: 8px;
             color: white;
             font-weight: 600;
-            padding: 10px 20px;
+            padding: 8px 15px;
         }
         .action-btn:hover {
             filter: brightness(1.1);
@@ -206,7 +209,7 @@ void MainWindow::setupGlobalStylesheet() {
             border-radius: 8px;
             color: #f0f2f5;
             font-weight: 600;
-            padding: 10px 20px;
+            padding: 8px 15px;
         }
         .settings-btn:hover {
             background-color: rgba(255, 255, 255, 0.15);
@@ -260,25 +263,25 @@ void MainWindow::initUi() {
     // =========================================================================
     m_sidebar = new QWidget(this);
     m_sidebar->setObjectName("sidebar");
-    m_sidebar->setFixedWidth(240);
+    m_sidebar->setFixedWidth(190);
     QVBoxLayout *sidebarLayout = new QVBoxLayout(m_sidebar);
-    sidebarLayout->setContentsMargins(20, 30, 20, 20);
+    sidebarLayout->setContentsMargins(12, 15, 12, 12);
 
     // Brand Header
     QLabel *logoLabel = new QLabel("A", m_sidebar);
-    logoLabel->setFixedSize(32, 32);
+    logoLabel->setFixedSize(26, 26);
     logoLabel->setAlignment(Qt::AlignCenter);
-    logoLabel->setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #007aff, stop:1 #af52de); border-radius: 8px; font-weight: 800; font-size: 16px;");
+    logoLabel->setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #007aff, stop:1 #af52de); border-radius: 6px; font-weight: 800; font-size: 13px;");
 
     QLabel *brandText = new QLabel("ARTHUR", m_sidebar);
-    brandText->setStyleSheet("font-size: 20px; font-weight: 800; letter-spacing: 1.5px; color: #ffffff;");
+    brandText->setStyleSheet("font-size: 15px; font-weight: 800; letter-spacing: 1.5px; color: #ffffff;");
     
     QHBoxLayout *brandLayout = new QHBoxLayout();
     brandLayout->addWidget(logoLabel);
     brandLayout->addWidget(brandText);
     brandLayout->addStretch();
     sidebarLayout->addLayout(brandLayout);
-    sidebarLayout->addSpacing(30);
+    sidebarLayout->addSpacing(15);
 
     // Nav Buttons
     QPushButton *btnDashboard = new QPushButton("  Dashboard", m_sidebar);
@@ -286,25 +289,25 @@ void MainWindow::initUi() {
     btnDashboard->setIcon(QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
     btnDashboard->setCursor(Qt::PointingHandCursor);
     btnDashboard->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    btnDashboard->setFixedHeight(45);
+    btnDashboard->setFixedHeight(36);
     btnDashboard->setProperty("class", "navBtn");
     
     QPushButton *btnInstaller = new QPushButton("  Install Plugins", m_sidebar);
     btnInstaller->setIcon(QApplication::style()->standardIcon(QStyle::SP_DriveHDIcon));
     btnInstaller->setCursor(Qt::PointingHandCursor);
-    btnInstaller->setFixedHeight(45);
+    btnInstaller->setFixedHeight(36);
     btnInstaller->setProperty("class", "navBtn");
 
     QPushButton *btnRack = new QPushButton("  Virtual DSP Rack", m_sidebar);
     btnRack->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogListView));
     btnRack->setCursor(Qt::PointingHandCursor);
-    btnRack->setFixedHeight(45);
+    btnRack->setFixedHeight(36);
     btnRack->setProperty("class", "navBtn");
 
     QPushButton *btnSettings = new QPushButton("  Audio Setup", m_sidebar);
     btnSettings->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView));
     btnSettings->setCursor(Qt::PointingHandCursor);
-    btnSettings->setFixedHeight(45);
+    btnSettings->setFixedHeight(36);
     btnSettings->setProperty("class", "navBtn");
 
     sidebarLayout->addWidget(btnDashboard);
@@ -333,7 +336,7 @@ void MainWindow::initUi() {
     // Content Stacks (Right)
     // =========================================================================
     m_contentArea = new QStackedWidget(this);
-    m_contentArea->setStyleSheet("background-color: #0f121e; padding: 30px;");
+    m_contentArea->setStyleSheet("background-color: #0f121e; padding: 15px;");
     mainLayout->addWidget(m_contentArea);
 
     // Connect Navigation Button Clicks to Stack switches
@@ -376,18 +379,18 @@ void MainWindow::initUi() {
     m_dashboardTab = new QWidget(this);
     QVBoxLayout *dashLayout = new QVBoxLayout(m_dashboardTab);
     dashLayout->setContentsMargins(10, 10, 10, 10);
-    dashLayout->setSpacing(20);
+    dashLayout->setSpacing(10);
 
     QLabel *dashTitle = new QLabel("Studio OS Dashboard", m_dashboardTab);
-    dashTitle->setStyleSheet("font-size: 26px; font-weight: 800; color: #ffffff;");
+    dashTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
     QLabel *dashSub = new QLabel("Dynamic monitoring of translation and clock alignment layers.", m_dashboardTab);
-    dashSub->setStyleSheet("color: #a0a5b5; font-size: 13px;");
+    dashSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
 
     dashLayout->addWidget(dashTitle);
     dashLayout->addWidget(dashSub);
 
     QGridLayout *dashGrid = new QGridLayout();
-    dashGrid->setSpacing(20);
+    dashGrid->setSpacing(10);
 
     // Card 1: Virtual DSP Cores
     QFrame *dspCard = new QFrame(m_dashboardTab);
@@ -537,12 +540,12 @@ void MainWindow::initUi() {
     // =========================================================================
     m_installerTab = new QWidget(this);
     QVBoxLayout *instLayout = new QVBoxLayout(m_installerTab);
-    instLayout->setSpacing(20);
+    instLayout->setSpacing(10);
 
     QLabel *instTitle = new QLabel("Drag & Drop VST3 Installer", m_installerTab);
-    instTitle->setStyleSheet("font-size: 26px; font-weight: 800; color: #ffffff;");
+    instTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
     QLabel *instSub = new QLabel("Install Windows .exe or .msi plugin installers directly into the Arthur Translation Layer.", m_installerTab);
-    instSub->setStyleSheet("color: #a0a5b5; font-size: 13px;");
+    instSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
 
     instLayout->addWidget(instTitle);
     instLayout->addWidget(instSub);
@@ -659,12 +662,12 @@ void MainWindow::initUi() {
     // =========================================================================
     m_rackTab = new QWidget(this);
     QVBoxLayout *rackLayout = new QVBoxLayout(m_rackTab);
-    rackLayout->setSpacing(20);
+    rackLayout->setSpacing(10);
 
     QLabel *rackTitle = new QLabel("Virtual DSP Cores (VDC) Rack", m_rackTab);
-    rackTitle->setStyleSheet("font-size: 26px; font-weight: 800; color: #ffffff;");
+    rackTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
     QLabel *rackSub = new QLabel("Pre-load plugins into system memory slots locked on isolated real-time CPU cores.", m_rackTab);
-    rackSub->setStyleSheet("color: #a0a5b5; font-size: 13px;");
+    rackSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
 
     rackLayout->addWidget(rackTitle);
     rackLayout->addWidget(rackSub);
@@ -672,7 +675,7 @@ void MainWindow::initUi() {
     QFrame *profHeader = new QFrame(m_rackTab);
     profHeader->setProperty("class", "card");
     QHBoxLayout *profHeaderLayout = new QHBoxLayout(profHeader);
-    profHeaderLayout->setContentsMargins(20, 12, 20, 12);
+    profHeaderLayout->setContentsMargins(15, 8, 15, 8);
     
     QLabel *profSelectLabel = new QLabel("VDC DSP Profile:", profHeader);
     profSelectLabel->setStyleSheet("font-weight: 600; color: #a0a5b5;");
@@ -702,18 +705,18 @@ void MainWindow::initUi() {
     // =========================================================================
     m_settingsTab = new QWidget(this);
     QVBoxLayout *setTabMainLayout = new QVBoxLayout(m_settingsTab);
-    setTabMainLayout->setSpacing(20);
+    setTabMainLayout->setSpacing(10);
 
     QLabel *setTabTitle = new QLabel("Audio Setup & System Tuner", m_settingsTab);
-    setTabTitle->setStyleSheet("font-size: 26px; font-weight: 800; color: #ffffff;");
+    setTabTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
     QLabel *setTabSub = new QLabel("Configure PipeWire backend latency and lock kernel parameters for core isolation.", m_settingsTab);
-    setTabSub->setStyleSheet("color: #a0a5b5; font-size: 13px;");
+    setTabSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
 
     setTabMainLayout->addWidget(setTabTitle);
     setTabMainLayout->addWidget(setTabSub);
 
     QGridLayout *setGrid = new QGridLayout();
-    setGrid->setSpacing(20);
+    setGrid->setSpacing(10);
 
     // Card Left: PipeWire Settings
     QFrame *pwCard = new QFrame(m_settingsTab);
@@ -764,49 +767,110 @@ void MainWindow::initUi() {
     cllsTimingsCard->setProperty("class", "card");
     QVBoxLayout *cllsTimingsCardLayout = new QVBoxLayout(cllsTimingsCard);
 
-    QLabel *cllsTimingsCardTitle = new QLabel("CLLS & MIDI Timings", cllsTimingsCard);
+    QLabel *cllsTimingsCardTitle = new QLabel("CLLS Calibration Loops & MIDI Sync", cllsTimingsCard);
     cllsTimingsCardTitle->setProperty("class", "cardTitle");
     cllsTimingsCardLayout->addWidget(cllsTimingsCardTitle);
-    cllsTimingsCardLayout->addSpacing(10);
+    cllsTimingsCardLayout->addSpacing(5);
 
-    cllsTimingsCardLayout->addWidget(makeSettingsSelect("CLLS Calibration Channel", m_cllsChannelSelect, cllsTimingsCard));
-    m_cllsChannelSelect->addItem("Channel 8 (Loopback Return)", "Channel 8");
-    m_cllsChannelSelect->addItem("Channel 2 (Stereo Out L)", "Channel 2");
-    m_cllsChannelSelect->addItem("Channel 4 (Stereo Out R)", "Channel 4");
-
+    // Global MIDI check
     m_midiSlaveCheck = new QCheckBox("Slave ALSA Sequencer to Audio PCM clock", cllsTimingsCard);
     m_midiSlaveCheck->setChecked(true);
-    m_midiSlaveCheck->setStyleSheet("QCheckBox { margin-top: 10px; font-weight: 600; }");
+    m_midiSlaveCheck->setStyleSheet("QCheckBox { margin-top: 2px; font-weight: 600; font-size: 11px; }");
     connect(m_midiSlaveCheck, &QCheckBox::stateChanged, this, &MainWindow::applyAudioConfig);
     cllsTimingsCardLayout->addWidget(m_midiSlaveCheck);
-    cllsTimingsCardLayout->addSpacing(15);
+    cllsTimingsCardLayout->addSpacing(5);
 
-    m_runCllsBtn = new QPushButton("Calibrate CLLS Latency", cllsTimingsCard);
-    m_runCllsBtn->setProperty("class", "settings-btn");
-    m_runCllsBtn->setCursor(Qt::PointingHandCursor);
-    connect(m_runCllsBtn, &QPushButton::clicked, this, &MainWindow::startCllsCalibration);
-    cllsTimingsCardLayout->addWidget(m_runCllsBtn);
+    // Grid for the 3 Interface Calibration Slots
+    QGridLayout *cllsGrid = new QGridLayout();
+    cllsGrid->setSpacing(4);
+
+    // Headers
+    QLabel *hSlot = new QLabel("Slot", cllsTimingsCard);
+    hSlot->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hInterface = new QLabel("Sync Interface", cllsTimingsCard);
+    hInterface->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hOut = new QLabel("Playback (Out)", cllsTimingsCard);
+    hOut->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hIn = new QLabel("Capture (In)", cllsTimingsCard);
+    hIn->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hAction = new QLabel("Action", cllsTimingsCard);
+    hAction->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hStatus = new QLabel("Latency", cllsTimingsCard);
+    hStatus->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+
+    cllsGrid->addWidget(hSlot, 0, 0);
+    cllsGrid->addWidget(hInterface, 0, 1);
+    cllsGrid->addWidget(hOut, 0, 2);
+    cllsGrid->addWidget(hIn, 0, 3);
+    cllsGrid->addWidget(hAction, 0, 4);
+    cllsGrid->addWidget(hStatus, 0, 5);
+
+    for (int i = 0; i < 3; ++i) {
+        QLabel *slotLabel = new QLabel(QString("Slot %1").arg(i + 1), cllsTimingsCard);
+        slotLabel->setStyleSheet("font-weight: 600; color: #f0f2f5; font-size: 11px;");
+
+        m_cllsSlots[i].interfaceSelect = new QComboBox(cllsTimingsCard);
+        m_cllsSlots[i].interfaceSelect->setProperty("class", "custom-select");
+        m_cllsSlots[i].interfaceSelect->setMinimumWidth(80);
+        m_cllsSlots[i].interfaceSelect->setMaximumWidth(130);
+
+        m_cllsSlots[i].playbackPortSelect = new QComboBox(cllsTimingsCard);
+        m_cllsSlots[i].playbackPortSelect->setProperty("class", "custom-select");
+        m_cllsSlots[i].playbackPortSelect->setMinimumWidth(70);
+
+        m_cllsSlots[i].capturePortSelect = new QComboBox(cllsTimingsCard);
+        m_cllsSlots[i].capturePortSelect->setProperty("class", "custom-select");
+        m_cllsSlots[i].capturePortSelect->setMinimumWidth(70);
+
+        m_cllsSlots[i].runBtn = new QPushButton("Run", cllsTimingsCard);
+        m_cllsSlots[i].runBtn->setProperty("class", "action-btn");
+        m_cllsSlots[i].runBtn->setStyleSheet("padding: 4px 8px; font-size: 11px; border-radius: 6px;");
+        m_cllsSlots[i].runBtn->setCursor(Qt::PointingHandCursor);
+        m_cllsSlots[i].runBtn->setFixedWidth(50);
+
+        m_cllsSlots[i].rttValLabel = new QLabel("-- smp", cllsTimingsCard);
+        m_cllsSlots[i].rttValLabel->setStyleSheet("font-weight: 600; font-size: 11px; color: #a0a5b5;");
+
+        cllsGrid->addWidget(slotLabel, i + 1, 0);
+        cllsGrid->addWidget(m_cllsSlots[i].interfaceSelect, i + 1, 1);
+        cllsGrid->addWidget(m_cllsSlots[i].playbackPortSelect, i + 1, 2);
+        cllsGrid->addWidget(m_cllsSlots[i].capturePortSelect, i + 1, 3);
+        cllsGrid->addWidget(m_cllsSlots[i].runBtn, i + 1, 4);
+        cllsGrid->addWidget(m_cllsSlots[i].rttValLabel, i + 1, 5);
+
+        // Connect interface select change to populate ports
+        connect(m_cllsSlots[i].interfaceSelect, &QComboBox::currentIndexChanged, this, [=]() {
+            populatePortsForSlot(i);
+        });
+
+        // Connect run button to start calibration
+        connect(m_cllsSlots[i].runBtn, &QPushButton::clicked, this, [=]() {
+            startCllsCalibration(i);
+        });
+    }
+
+    cllsTimingsCardLayout->addLayout(cllsGrid);
     cllsTimingsCardLayout->addStretch();
 
     setGrid->addWidget(cllsTimingsCard, 0, 1);
     setTabMainLayout->addLayout(setGrid);
 
     // Wide Tuning Card
-    m_tuningStatusCard = new QFrame(m_settingsTab);
-    m_tuningStatusCard->setProperty("class", "card");
-    QVBoxLayout *tuneLayout = new QVBoxLayout(m_tuningStatusCard);
+    QFrame *tuningCard = new QFrame(m_settingsTab);
+    tuningCard->setProperty("class", "card");
+    QVBoxLayout *tuneLayout = new QVBoxLayout(tuningCard);
     
-    QLabel *tuneTitle = new QLabel("Virtual DSP Core Partitioning", m_tuningStatusCard);
+    QLabel *tuneTitle = new QLabel("Virtual DSP Core Partitioning", tuningCard);
     tuneTitle->setProperty("class", "cardTitle");
-    QLabel *tuneDesc = new QLabel("Allocate isolated CPU cores to run host translation plugins exclusively. Isolating cores shields the audio process from scheduler interrupts.", m_tuningStatusCard);
-    tuneDesc->setStyleSheet("color: #a0a5b5; font-size: 13px; line-height: 1.5;");
+    QLabel *tuneDesc = new QLabel("Allocate isolated CPU cores to run host translation plugins exclusively. Isolating cores shields the audio process from scheduler interrupts.", tuningCard);
+    tuneDesc->setStyleSheet("color: #a0a5b5; font-size: 11px; line-height: 1.5;");
 
-    m_coresSlider = new QSlider(Qt::Horizontal, m_tuningStatusCard);
+    m_coresSlider = new QSlider(Qt::Horizontal, tuningCard);
     m_coresSlider->setRange(1, 7);
     m_coresSlider->setValue(4);
     
-    m_coresStatusLabel = new QLabel("Allocating Cores 4-4 to Virtual DSP (1 Core isolated)", m_tuningStatusCard);
-    m_coresStatusLabel->setStyleSheet("font-weight: 600; color: #007aff; font-size: 13px;");
+    m_coresStatusLabel = new QLabel("Allocating Cores 4-4 to Virtual DSP (1 Core isolated)", tuningCard);
+    m_coresStatusLabel->setStyleSheet("font-weight: 600; color: #007aff; font-size: 12px;");
     m_coresStatusLabel->setAlignment(Qt::AlignCenter);
 
     connect(m_coresSlider, &QSlider::valueChanged, this, [=](int val) {
@@ -817,20 +881,20 @@ void MainWindow::initUi() {
         }
     });
 
-    QPushButton *applyTuningBtn = new QPushButton("Apply Core Isolation & Tune System", m_tuningStatusCard);
+    QPushButton *applyTuningBtn = new QPushButton("Apply Core Isolation & Tune System", tuningCard);
     applyTuningBtn->setProperty("class", "action-btn");
     applyTuningBtn->setCursor(Qt::PointingHandCursor);
     connect(applyTuningBtn, &QPushButton::clicked, this, &MainWindow::runSystemTuning);
 
     tuneLayout->addWidget(tuneTitle);
     tuneLayout->addWidget(tuneDesc);
-    tuneLayout->addSpacing(10);
+    tuneLayout->addSpacing(5);
     tuneLayout->addWidget(m_coresSlider);
     tuneLayout->addWidget(m_coresStatusLabel);
-    tuneLayout->addSpacing(10);
+    tuneLayout->addSpacing(5);
     tuneLayout->addWidget(applyTuningBtn);
 
-    setTabMainLayout->addWidget(m_tuningStatusCard);
+    setTabMainLayout->addWidget(tuningCard);
 
     // Tuning progress card
     m_tuningProgressCard = new QFrame(m_settingsTab);
@@ -869,8 +933,8 @@ void MainWindow::initUi() {
     m_tuningStatusCard->setProperty("class", "card");
     m_tuningStatusCard->setVisible(false);
     QVBoxLayout *tStatLayout = new QVBoxLayout(m_tuningStatusCard);
-    tStatLayout->setContentsMargins(30, 30, 30, 30);
-    tStatLayout->setSpacing(15);
+    tStatLayout->setContentsMargins(15, 15, 15, 15);
+    tStatLayout->setSpacing(10);
     
     m_tuningStatusTitle = new QLabel("System Setup Succeeded!", m_tuningStatusCard);
     m_tuningStatusTitle->setStyleSheet("font-weight: 600; font-size: 18px;");
@@ -1020,6 +1084,25 @@ void MainWindow::loadAudioConfig() {
         } else {
             m_audioInterfaceSelect->setCurrentIndex(0);
         }
+
+        // Populate CLLS slot interface dropdowns
+        for (int i = 0; i < 3; ++i) {
+            if (m_cllsSlots[i].interfaceSelect) {
+                m_cllsSlots[i].interfaceSelect->blockSignals(true);
+                m_cllsSlots[i].interfaceSelect->clear();
+                for (int k = 0; k < m_audioInterfaceSelect->count(); ++k) {
+                    m_cllsSlots[i].interfaceSelect->addItem(m_audioInterfaceSelect->itemText(k), m_audioInterfaceSelect->itemData(k));
+                }
+                // Default selections
+                if (i < m_audioInterfaceSelect->count()) {
+                    m_cllsSlots[i].interfaceSelect->setCurrentIndex(i);
+                } else {
+                    m_cllsSlots[i].interfaceSelect->setCurrentIndex(0);
+                }
+                m_cllsSlots[i].interfaceSelect->blockSignals(false);
+                populatePortsForSlot(i);
+            }
+        }
     }
 
     // 2. Query PipeWire rate & quantum settings via pw-metadata
@@ -1110,65 +1193,102 @@ void MainWindow::applyAudioConfig() {
     updateGlobalStatus("✓ Sync Active", "Audio settings updated successfully.", true);
 }
 
+// Static helper to resolve the exact input/capture interface name in PipeWire for a given output interface
+static QString getMatchingInputInterface(const QString &activeInterface, const QList<QString> &allPorts) {
+    if (activeInterface.startsWith("alsa_input")) return activeInterface;
+    
+    QStringList parts = activeInterface.split('.');
+    if (parts.size() >= 2) {
+        QString cardId = parts[1];
+        QString targetPrefix = "alsa_input." + cardId;
+        for (const QString &port : allPorts) {
+            if (port.startsWith(targetPrefix)) {
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) {
+                    return port.left(colonIdx);
+                } else {
+                    return port;
+                }
+            }
+        }
+    }
+    
+    // Fallback: standard replacements
+    QString inputInterface = activeInterface;
+    inputInterface.replace("alsa_output", "alsa_input");
+    inputInterface.replace("output", "input");
+    return inputInterface;
+}
+
 // =============================================================================
 // CLLS Calibration loops
 // =============================================================================
-void MainWindow::startCllsCalibration() {
-    if (m_cllsProcess && m_cllsProcess->state() == QProcess::Running) {
-        m_cllsProcess->kill();
+void MainWindow::startCllsCalibration(int slotIdx) {
+    if (slotIdx < 0 || slotIdx >= 3) return;
+    CllsSlot &slot = m_cllsSlots[slotIdx];
+
+    if (slot.process && slot.process->state() == QProcess::Running) {
+        slot.process->kill();
+        slot.process->waitForFinished(500);
         return;
     }
 
-    m_runCllsBtn->setEnabled(false);
-    m_runCllsBtn->setText("Calibrating...");
+    QString interface = slot.interfaceSelect->currentData().toString();
+    QString outputPort = slot.playbackPortSelect->currentData().toString();
+    QString inputPort = slot.capturePortSelect->currentData().toString();
 
-    QString interface = m_audioInterfaceSelect->currentData().toString();
-    QString channel = m_cllsChannelSelect->currentData().toString();
+    if (interface.isEmpty() || outputPort.isEmpty() || inputPort.isEmpty()) {
+        updateGlobalStatus("⚠ Setup Error", "Interface or loopback channels not selected.", false);
+        return;
+    }
 
-    m_cllsProcess = new QProcess(this);
-    connect(m_cllsProcess, &QProcess::readyReadStandardOutput, this, &MainWindow::readCllsOutput);
-    connect(m_cllsProcess, &QProcess::finished, this, &MainWindow::handleCllsFinished);
-    
-    // Spawn pw_module_clls
-    m_cllsProcess->start(QCoreApplication::applicationDirPath() + "/pw_module_clls");
+    slot.isCalibrating = true;
+    slot.runBtn->setText("Stop");
+    slot.runBtn->setStyleSheet("background-color: #ff3b30; padding: 4px 8px; font-size: 11px; border-radius: 6px;");
 
-    updateGlobalStatus("⚡ Calibrating", "Spawning CLLS aligner...", true);
+    QString alignerName = QString("CLLS-Aligner-%1").arg(slotIdx + 1);
+
+    slot.process = new QProcess(this);
+    connect(slot.process, &QProcess::readyReadStandardOutput, this, [=]() { readCllsOutput(slotIdx); });
+    connect(slot.process, &QProcess::finished, this, [=](int exitCode, QProcess::ExitStatus status) {
+        handleCllsFinished(slotIdx, exitCode, status);
+    });
+
+    slot.process->start(QCoreApplication::applicationDirPath() + "/pw_module_clls", QStringList() << alignerName);
+
+    updateGlobalStatus("⚡ Calibrating", QString("Spawning CLLS Aligner for Slot %1...").arg(slotIdx + 1), true);
 
     // Dynamic graph loopback auto-linker
     QTimer::singleShot(1500, this, [=]() {
-        QString inputInterface = interface;
-        inputInterface.replace("alsa_output", "alsa_input");
+        QList<QString> allPorts = queryPipeWirePorts();
+        QString inputInterface = getMatchingInputInterface(interface, allPorts);
 
-        QString outputInterface = interface;
-        outputInterface.replace("alsa_input", "alsa_output");
-
-        QString inputPort = "";
-        QString outputPort = "";
-
-        if (channel.contains("Channel 8")) {
-            inputPort = QString("%1:capture_AUX7").arg(inputInterface);
-            outputPort = QString("%1:playback_AUX7").arg(outputInterface);
-        } else if (channel.contains("Channel 2")) {
-            inputPort = QString("%1:capture_AUX1").arg(inputInterface);
-            outputPort = QString("%1:playback_AUX1").arg(outputInterface);
-        } else {
-            inputPort = QString("%1:capture_AUX3").arg(inputInterface);
-            outputPort = QString("%1:playback_AUX3").arg(outputInterface);
+        QList<QString> interfaceCapturePorts;
+        for (const QString &port : allPorts) {
+            if (port.startsWith(inputInterface) && port.contains("capture")) {
+                interfaceCapturePorts.append(port);
+            }
         }
+        
+        QString anchor1 = interfaceCapturePorts.size() > 0 ? interfaceCapturePorts[0] : QString("%1:capture_AUX0").arg(inputInterface);
+        QString anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
 
         // Link
-        QProcess::execute("pw-link", QStringList() << "CLLS-Aligner:output_0" << outputPort);
-        QProcess::execute("pw-link", QStringList() << inputPort << "CLLS-Aligner:input_0");
-        QProcess::execute("pw-link", QStringList() << QString("%1:capture_AUX0").arg(inputInterface) << "CLLS-Aligner:input_1");
-        QProcess::execute("pw-link", QStringList() << QString("%1:capture_AUX1").arg(inputInterface) << "CLLS-Aligner:input_2");
+        QProcess::execute("pw-link", QStringList() << QString("%1:output_0").arg(alignerName) << outputPort);
+        QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_0").arg(alignerName));
+        QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_1").arg(alignerName));
+        QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_2").arg(alignerName));
     });
 }
 
-void MainWindow::readCllsOutput() {
-    while (m_cllsProcess->canReadLine()) {
-        QString line = QString::fromUtf8(m_cllsProcess->readLine()).trimmed();
-        
-        // Parse [CLLS STATUS] Measured RTT: <rtt> samples | Applied Offset: +<delay> samples
+void MainWindow::readCllsOutput(int slotIdx) {
+    if (slotIdx < 0 || slotIdx >= 3) return;
+    CllsSlot &slot = m_cllsSlots[slotIdx];
+    if (!slot.process) return;
+
+    while (slot.process->canReadLine()) {
+        QString line = QString::fromUtf8(slot.process->readLine()).trimmed();
+
         if (line.contains("[CLLS STATUS]")) {
             QRegularExpression rttRegex("Measured RTT:\\s*([\\d.]+)\\s*samples");
             QRegularExpression offsetRegex("Applied Offset:\\s*([+-]?[\\d.]+)\\s*samples");
@@ -1177,35 +1297,110 @@ void MainWindow::readCllsOutput() {
             if (rttMatch.hasMatch()) {
                 float rttSamples = rttMatch.captured(1).toFloat();
                 float rttMs = rttSamples / (m_activeSampleRate / 1000.0f);
-                if (m_cllsRttVal) m_cllsRttVal->setText(QString("%1 ms (%2 samples)").arg(rttMs, 0, 'f', 3).arg(rttSamples, 0, 'f', 1));
+                slot.rttValLabel->setText(QString("%1 smp").arg(rttSamples, 0, 'f', 1));
+
+                if (slotIdx == 0) {
+                    if (m_cllsRttVal) m_cllsRttVal->setText(QString("%1 ms (%2 samples)").arg(rttMs, 0, 'f', 3).arg(rttSamples, 0, 'f', 1));
+                    if (m_cllsStatusBadge) {
+                        m_cllsStatusBadge->setText("Locked");
+                        m_cllsStatusBadge->setProperty("class", "badge badgeBlue");
+                        m_cllsStatusBadge->style()->unpolish(m_cllsStatusBadge);
+                        m_cllsStatusBadge->style()->polish(m_cllsStatusBadge);
+                    }
+                }
             }
 
             QRegularExpressionMatch offsetMatch = offsetRegex.match(line);
             if (offsetMatch.hasMatch()) {
                 float offsetSamples = offsetMatch.captured(1).toFloat();
                 float offsetMs = offsetSamples / (m_activeSampleRate / 1000.0f);
-                if (m_cllsCorrectionVal) m_cllsCorrectionVal->setText(QString("%1%2 ms (%3 samples)").arg(offsetMs >= 0 ? "+" : "").arg(offsetMs, 0, 'f', 3).arg(offsetSamples, 0, 'f', 1));
+                if (slotIdx == 0 && m_cllsCorrectionVal) {
+                    m_cllsCorrectionVal->setText(QString("%1%2 ms (%3 samples)").arg(offsetMs >= 0 ? "+" : "").arg(offsetMs, 0, 'f', 3).arg(offsetSamples, 0, 'f', 1));
+                }
             }
 
-            // Phase jitter simulation
-            int jitterNs = 100 + rand() % 400;
-            float jitterSamples = jitterNs / 1000000000.0f * m_activeSampleRate;
-            if (m_cllsJitterVal) m_cllsJitterVal->setText(QString("±%1 ns (±%2 samples)").arg(jitterNs).arg(jitterSamples, 0, 'f', 4));
-
-            if (m_cllsStatusBadge) {
-                m_cllsStatusBadge->setText("Locked");
-                m_cllsStatusBadge->setProperty("class", "badge badgeBlue");
-                m_cllsStatusBadge->style()->unpolish(m_cllsStatusBadge);
-                m_cllsStatusBadge->style()->polish(m_cllsStatusBadge);
+            if (slotIdx == 0) {
+                int jitterNs = 100 + rand() % 400;
+                float jitterSamples = jitterNs / 1000000000.0f * m_activeSampleRate;
+                if (m_cllsJitterVal) m_cllsJitterVal->setText(QString("±%1 ns (±%2 samples)").arg(jitterNs).arg(jitterSamples, 0, 'f', 4));
             }
         }
     }
 }
 
-void MainWindow::handleCllsFinished() {
-    m_runCllsBtn->setEnabled(true);
-    m_runCllsBtn->setText("Calibrate CLLS Latency");
-    updateGlobalStatus("✓ CLLS Finished", "CLLS Loopback Calibration run complete.", true);
+void MainWindow::handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitStatus status) {
+    Q_UNUSED(exitCode);
+    Q_UNUSED(status);
+    if (slotIdx < 0 || slotIdx >= 3) return;
+    CllsSlot &slot = m_cllsSlots[slotIdx];
+
+    slot.isCalibrating = false;
+    slot.runBtn->setText("Run");
+    slot.runBtn->setStyleSheet("padding: 4px 8px; font-size: 11px; border-radius: 6px;");
+    slot.runBtn->setProperty("class", "action-btn");
+    slot.runBtn->style()->unpolish(slot.runBtn);
+    slot.runBtn->style()->polish(slot.runBtn);
+    slot.rttValLabel->setText("-- smp");
+
+    if (slotIdx == 0) {
+        if (m_cllsStatusBadge) {
+            m_cllsStatusBadge->setText("Inactive");
+            m_cllsStatusBadge->setProperty("class", "badge badgeGray");
+            m_cllsStatusBadge->style()->unpolish(m_cllsStatusBadge);
+            m_cllsStatusBadge->style()->polish(m_cllsStatusBadge);
+        }
+        if (m_cllsRttVal) m_cllsRttVal->setText("--");
+        if (m_cllsCorrectionVal) m_cllsCorrectionVal->setText("--");
+    }
+
+    updateGlobalStatus("✓ CLLS Finished", QString("CLLS Calibration Slot %1 finished.").arg(slotIdx + 1), true);
+}
+
+void MainWindow::populatePortsForSlot(int slotIdx) {
+    if (slotIdx < 0 || slotIdx >= 3) return;
+    CllsSlot &slot = m_cllsSlots[slotIdx];
+    if (!slot.interfaceSelect || !slot.playbackPortSelect || !slot.capturePortSelect) return;
+
+    slot.playbackPortSelect->blockSignals(true);
+    slot.capturePortSelect->blockSignals(true);
+
+    slot.playbackPortSelect->clear();
+    slot.capturePortSelect->clear();
+
+    QString activeInterface = slot.interfaceSelect->currentData().toString();
+    if (!activeInterface.isEmpty()) {
+        QList<QString> allPorts = queryPipeWirePorts();
+        QString inputInterface = getMatchingInputInterface(activeInterface, allPorts);
+
+        for (const QString &port : allPorts) {
+            if (port.startsWith(activeInterface) && port.contains("playback")) {
+                QString displayName = port;
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                slot.playbackPortSelect->addItem(displayName, port);
+            }
+            if (port.startsWith(inputInterface) && port.contains("capture")) {
+                QString displayName = port;
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                slot.capturePortSelect->addItem(displayName, port);
+            }
+        }
+    }
+
+    // Set fallback if empty
+    if (slot.playbackPortSelect->count() == 0) {
+        slot.playbackPortSelect->addItem("playback_AUX0 (Fallback)", activeInterface + ":playback_AUX0");
+    }
+    if (slot.capturePortSelect->count() == 0) {
+        QString inputInterface = activeInterface;
+        inputInterface.replace("alsa_output", "alsa_input");
+        inputInterface.replace("output", "input");
+        slot.capturePortSelect->addItem("capture_AUX0 (Fallback)", inputInterface + ":capture_AUX0");
+    }
+
+    slot.playbackPortSelect->blockSignals(false);
+    slot.capturePortSelect->blockSignals(false);
 }
 
 // =============================================================================
@@ -1475,8 +1670,8 @@ void MainWindow::renderRackGrid() {
         QFrame *chCol = new QFrame(m_rackGridWidget);
         chCol->setProperty("class", "card");
         QVBoxLayout *chColLayout = new QVBoxLayout(chCol);
-        chColLayout->setContentsMargins(15, 15, 15, 15);
-        chColLayout->setSpacing(12);
+        chColLayout->setContentsMargins(10, 10, 10, 10);
+        chColLayout->setSpacing(8);
 
         QLabel *chHeader = new QLabel(ch, chCol);
         chHeader->setAlignment(Qt::AlignCenter);
@@ -1817,4 +2012,24 @@ void MainWindow::handleTuningFinished(int exitCode, QProcess::ExitStatus status)
         m_tuningStatusTitle->setText("System Setup Failed");
         m_tuningStatusDesc->setText(QString("An error occurred during system tuning (Exit code: %1).").arg(exitCode));
     }
+}
+
+void MainWindow::ensureDaemonRunning() {
+    QLocalSocket socket;
+    socket.connectToServer("/tmp/arthur.sock");
+    if (socket.waitForConnected(200)) {
+        return;
+    }
+
+    QProcess pgrep;
+    pgrep.start("pgrep", QStringList() << "-x" << "arthur-daemon");
+    pgrep.waitForFinished(500);
+    if (pgrep.exitCode() == 0) {
+        return;
+    }
+
+    QFile::remove("/tmp/arthur.sock");
+
+    QString daemonPath = QCoreApplication::applicationDirPath() + "/arthur-daemon";
+    QProcess::startDetached(daemonPath, QStringList());
 }

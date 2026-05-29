@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     app.setApplicationVersion("3.3.0");
 
     MainWindow w;
-    w.resize(960, 600);
+    w.resize(820, 520);
     w.show();
 
     return app.exec();
