@@ -1564,15 +1564,15 @@ void MainWindow::loadVdcProfiles() {
         m_currentProfile.vdc_slots.clear();
 
         if (!installed.isEmpty()) {
-            m_currentProfile.vdc_slots.append({1, "CH 1 INSERTS", installed[0], true, "capture_AUX0", "playback_AUX0"});
+            m_currentProfile.vdc_slots.append({1, "CH 1 INSERTS", installed[0], true});
             if (installed.size() > 1) {
-                m_currentProfile.vdc_slots.append({2, "CH 1 INSERTS", installed[1], true, "capture_AUX0", "playback_AUX0"});
+                m_currentProfile.vdc_slots.append({2, "CH 1 INSERTS", installed[1], true});
             }
             if (installed.size() > 2) {
-                m_currentProfile.vdc_slots.append({1, "CH 2 INSERTS", installed[2], true, "capture_AUX1", "playback_AUX1"});
+                m_currentProfile.vdc_slots.append({1, "CH 2 INSERTS", installed[2], true});
             }
         } else {
-            m_currentProfile.vdc_slots.append({1, "CH 1 INSERTS", "CyberDenoiserPro", true, "capture_AUX0", "playback_AUX0"});
+            m_currentProfile.vdc_slots.append({1, "CH 1 INSERTS", "CyberDenoiserPro", true});
         }
 
         saveCurrentProfile();
@@ -1582,9 +1582,9 @@ void MainWindow::loadVdcProfiles() {
         m_currentProfile.buffer_size = 256;
         m_currentProfile.vdc_slots.clear();
         if (!installed.isEmpty()) {
-            m_currentProfile.vdc_slots.append({1, "CH 3 INSERTS", installed.first(), true, "capture_AUX2", "playback_AUX2"});
+            m_currentProfile.vdc_slots.append({1, "CH 3 INSERTS", installed.first(), true});
         } else {
-            m_currentProfile.vdc_slots.append({1, "CH 3 INSERTS", "THE MIDS ROOM", true, "capture_AUX2", "playback_AUX2"});
+            m_currentProfile.vdc_slots.append({1, "CH 3 INSERTS", "THE MIDS ROOM", true});
         }
 
         saveCurrentProfile();
@@ -1614,8 +1614,6 @@ void MainWindow::loadProfile(const QString &name) {
             slot.channel_name = slotObj["channel_name"].toString();
             slot.vst3_dll_path = slotObj["vst3_dll_path"].toString();
             slot.active = slotObj["active"].toBool();
-            slot.input_source = slotObj["input_source"].toString();
-            slot.output_destination = slotObj["output_destination"].toString();
             m_currentProfile.vdc_slots.append(slot);
         }
 
@@ -1723,8 +1721,6 @@ void MainWindow::saveCurrentProfile() {
             slotObj["channel_name"] = slot.channel_name;
             slotObj["vst3_dll_path"] = slot.vst3_dll_path;
             slotObj["active"] = slot.active;
-            slotObj["input_source"] = slot.input_source;
-            slotObj["output_destination"] = slot.output_destination;
             slotsArr.append(slotObj);
 
             // Notify arthur-daemon client load for active VST guest slots using slot-based naming
@@ -1795,8 +1791,6 @@ void MainWindow::renderRackGrid() {
         newSlot.channel_name = "Solo Rack";
         newSlot.vst3_dll_path = "";
         newSlot.active = false;
-        newSlot.input_source = "";
-        newSlot.output_destination = "";
         m_currentProfile.vdc_slots.append(newSlot);
         renderRackGrid();
     });
@@ -1811,27 +1805,19 @@ void MainWindow::renderRackGrid() {
     colHeaders->setContentsMargins(10, 5, 10, 5);
     
     QLabel *hActive = new QLabel("Active", m_rackGridWidget);
-    hActive->setFixedWidth(50);
+    hActive->setFixedWidth(60);
     hActive->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
     
     QLabel *hPlugin = new QLabel("VST3 Plugin", m_rackGridWidget);
-    hPlugin->setFixedWidth(200);
     hPlugin->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
     
-    QLabel *hInput = new QLabel("Input Source", m_rackGridWidget);
-    hInput->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
-    
-    QLabel *hOutput = new QLabel("Output Destination", m_rackGridWidget);
-    hOutput->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
-    
     QLabel *hDelete = new QLabel("Action", m_rackGridWidget);
-    hDelete->setFixedWidth(50);
+    hDelete->setFixedWidth(60);
+    hDelete->setAlignment(Qt::AlignCenter);
     hDelete->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
 
     colHeaders->addWidget(hActive);
     colHeaders->addWidget(hPlugin);
-    colHeaders->addWidget(hInput);
-    colHeaders->addWidget(hOutput);
     colHeaders->addWidget(hDelete);
     layout->addLayout(colHeaders);
 
@@ -1848,7 +1834,6 @@ void MainWindow::renderRackGrid() {
     scrollLayout->setSpacing(6);
 
     QList<QString> installedPlugins = scanInstalledVst3Plugins();
-    QList<QString> allPorts = queryPipeWirePorts();
 
     for (int i = 0; i < m_currentProfile.vdc_slots.size(); ++i) {
         VdcSlot &slot = m_currentProfile.vdc_slots[i];
@@ -1862,7 +1847,7 @@ void MainWindow::renderRackGrid() {
 
         // 1. Active Checkbox
         QCheckBox *chkActive = new QCheckBox(rowFrame);
-        chkActive->setFixedWidth(50);
+        chkActive->setFixedWidth(60);
         chkActive->setChecked(slot.active);
         connect(chkActive, &QCheckBox::toggled, this, [=, &slot](bool checked) {
             slot.active = checked;
@@ -1870,7 +1855,7 @@ void MainWindow::renderRackGrid() {
 
         // 2. Plugin Selector
         QComboBox *cmbPlugin = new QComboBox(rowFrame);
-        cmbPlugin->setFixedWidth(200);
+        cmbPlugin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         cmbPlugin->setProperty("class", "custom-select");
         for (const QString &plug : installedPlugins) {
             cmbPlugin->addItem(plug, plug);
@@ -1890,57 +1875,9 @@ void MainWindow::renderRackGrid() {
             slot.vst3_dll_path = text;
         });
 
-        // 3. Input Port Selector
-        QComboBox *cmbInput = new QComboBox(rowFrame);
-        cmbInput->setProperty("class", "custom-select");
-        for (const QString &port : allPorts) {
-            if (port.contains("capture") || port.contains("monitor")) {
-                QString displayName = port;
-                int colonIdx = port.indexOf(':');
-                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
-                cmbInput->addItem(displayName, port);
-            }
-        }
-        if (cmbInput->count() == 0) {
-            cmbInput->addItem("capture_AUX0 (Fallback)", "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0");
-        }
-        int inputIdx = cmbInput->findData(slot.input_source);
-        if (inputIdx >= 0) {
-            cmbInput->setCurrentIndex(inputIdx);
-        } else if (cmbInput->count() > 0) {
-            slot.input_source = cmbInput->currentData().toString();
-        }
-        connect(cmbInput, &QComboBox::currentIndexChanged, this, [=, &slot](int index) {
-            slot.input_source = cmbInput->itemData(index).toString();
-        });
-
-        // 4. Output Port Selector
-        QComboBox *cmbOutput = new QComboBox(rowFrame);
-        cmbOutput->setProperty("class", "custom-select");
-        for (const QString &port : allPorts) {
-            if (port.contains("playback") || port.contains("input")) {
-                QString displayName = port;
-                int colonIdx = port.indexOf(':');
-                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
-                cmbOutput->addItem(displayName, port);
-            }
-        }
-        if (cmbOutput->count() == 0) {
-            cmbOutput->addItem("playback_AUX0 (Fallback)", "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0");
-        }
-        int outputIdx = cmbOutput->findData(slot.output_destination);
-        if (outputIdx >= 0) {
-            cmbOutput->setCurrentIndex(outputIdx);
-        } else if (cmbOutput->count() > 0) {
-            slot.output_destination = cmbOutput->currentData().toString();
-        }
-        connect(cmbOutput, &QComboBox::currentIndexChanged, this, [=, &slot](int index) {
-            slot.output_destination = cmbOutput->itemData(index).toString();
-        });
-
-        // 5. Delete Button
+        // 3. Delete Button
         QPushButton *btnDelete = new QPushButton("✖", rowFrame);
-        btnDelete->setFixedSize(30, 26);
+        btnDelete->setFixedSize(60, 26);
         btnDelete->setCursor(Qt::PointingHandCursor);
         btnDelete->setStyleSheet("background: transparent; border: none; color: rgba(255,255,255,0.4); font-size: 14px;");
         btnDelete->setToolTip("Delete Solo DSP Instance");
@@ -1951,8 +1888,6 @@ void MainWindow::renderRackGrid() {
 
         rowLayout->addWidget(chkActive);
         rowLayout->addWidget(cmbPlugin);
-        rowLayout->addWidget(cmbInput);
-        rowLayout->addWidget(cmbOutput);
         rowLayout->addWidget(btnDelete);
 
         scrollLayout->addWidget(rowFrame);

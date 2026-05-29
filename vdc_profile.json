@@ -47,21 +47,6 @@
             "type": "boolean",
             "description": "Whether this plugin is enabled and processing in the background",
             "default": true
-          },
-          "pipewire_routing": {
-            "type": "object",
-            "description": "Default PipeWire audio connection paths",
-            "properties": {
-              "input_source": {
-                "type": "string",
-                "description": "PipeWire port to route into this plugin's input"
-              },
-              "output_destination": {
-                "type": "string",
-                "description": "PipeWire port to route this plugin's output into"
-              }
-            },
-            "required": ["input_source", "output_destination"]
           }
         },
         "required": ["slot_id", "channel_name", "vst3_dll_path", "active"]

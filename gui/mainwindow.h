@@ -40,8 +40,6 @@ struct VdcSlot {
     QString channel_name;
     QString vst3_dll_path;
     bool active;
-    QString input_source;
-    QString output_destination;
 };
 
 struct VdcProfile {
