@@ -839,9 +839,18 @@ void MainWindow::initUi() {
         cllsGrid->addWidget(m_cllsSlots[i].runBtn, i + 1, 4);
         cllsGrid->addWidget(m_cllsSlots[i].rttValLabel, i + 1, 5);
 
-        // Connect interface select change to populate ports
+        // Connect interface select change to populate ports and auto-save
         connect(m_cllsSlots[i].interfaceSelect, &QComboBox::currentIndexChanged, this, [=]() {
             populatePortsForSlot(i);
+            saveAudioConfig();
+        });
+
+        // Connect port selects to auto-save
+        connect(m_cllsSlots[i].playbackPortSelect, &QComboBox::currentIndexChanged, this, [=]() {
+            saveAudioConfig();
+        });
+        connect(m_cllsSlots[i].capturePortSelect, &QComboBox::currentIndexChanged, this, [=]() {
+            saveAudioConfig();
         });
 
         // Connect run button to start calibration
@@ -1080,15 +1089,35 @@ void MainWindow::loadAudioConfig() {
             m_audioInterfaceSelect->addItem("EVO4 Pro (Fallback)", "alsa_output.usb-Audient_EVO4-00.pro-output-0");
         }
 
-        // Get default sink
-        QProcess pactlDef;
-        if (flatpakMode) {
-            pactlDef.start("flatpak-spawn", QStringList() << "--host" << "pactl" << "get-default-sink");
-        } else {
-            pactlDef.start("pactl", QStringList() << "get-default-sink");
+        // Check if config file exists
+        QString configPath = QDir::homePath() + "/.config/arthur/audio_settings.json";
+        QFile file(configPath);
+        bool hasSavedConfig = false;
+        QJsonObject savedObj;
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (!doc.isNull() && doc.isObject()) {
+                savedObj = doc.object();
+                hasSavedConfig = true;
+            }
+            file.close();
         }
-        pactlDef.waitForFinished(500);
-        activeInterface = QString::fromUtf8(pactlDef.readAllStandardOutput()).trimmed();
+
+        if (hasSavedConfig && savedObj.contains("audio_interface")) {
+            activeInterface = savedObj["audio_interface"].toString();
+        } else {
+            // Get default sink
+            QProcess pactlDef;
+            if (flatpakMode) {
+                pactlDef.start("flatpak-spawn", QStringList() << "--host" << "pactl" << "get-default-sink");
+            } else {
+                pactlDef.start("pactl", QStringList() << "get-default-sink");
+            }
+            pactlDef.waitForFinished(500);
+            activeInterface = QString::fromUtf8(pactlDef.readAllStandardOutput()).trimmed();
+        }
+
         int idx = m_audioInterfaceSelect->findData(activeInterface);
         if (idx >= 0) {
             m_audioInterfaceSelect->setCurrentIndex(idx);
@@ -1097,6 +1126,7 @@ void MainWindow::loadAudioConfig() {
         }
 
         // Populate CLLS slot interface dropdowns
+        QJsonArray cllsArray = savedObj["clls_slots"].toArray();
         for (int i = 0; i < 3; ++i) {
             if (m_cllsSlots[i].interfaceSelect) {
                 m_cllsSlots[i].interfaceSelect->blockSignals(true);
@@ -1104,73 +1134,149 @@ void MainWindow::loadAudioConfig() {
                 for (int k = 0; k < m_audioInterfaceSelect->count(); ++k) {
                     m_cllsSlots[i].interfaceSelect->addItem(m_audioInterfaceSelect->itemText(k), m_audioInterfaceSelect->itemData(k));
                 }
-                // Default selections
-                if (i < m_audioInterfaceSelect->count()) {
-                    m_cllsSlots[i].interfaceSelect->setCurrentIndex(i);
+                
+                // Restore CLLS slot interface selection
+                QString slotInterface = "";
+                if (hasSavedConfig && i < cllsArray.size()) {
+                    slotInterface = cllsArray[i].toObject()["interface"].toString();
+                }
+                
+                int slotIdx = -1;
+                if (!slotInterface.isEmpty()) {
+                    slotIdx = m_cllsSlots[i].interfaceSelect->findData(slotInterface);
+                }
+                
+                if (slotIdx >= 0) {
+                    m_cllsSlots[i].interfaceSelect->setCurrentIndex(slotIdx);
                 } else {
-                    m_cllsSlots[i].interfaceSelect->setCurrentIndex(0);
+                    // Default selections
+                    if (i < m_audioInterfaceSelect->count()) {
+                        m_cllsSlots[i].interfaceSelect->setCurrentIndex(i);
+                    } else {
+                        m_cllsSlots[i].interfaceSelect->setCurrentIndex(0);
+                    }
                 }
                 m_cllsSlots[i].interfaceSelect->blockSignals(false);
                 populatePortsForSlot(i);
+
+                // Restore CLLS slot playback and capture ports
+                if (hasSavedConfig && i < cllsArray.size()) {
+                    QJsonObject slotSavedObj = cllsArray[i].toObject();
+                    QString playbackPort = slotSavedObj["playback_port"].toString();
+                    QString capturePort = slotSavedObj["capture_port"].toString();
+
+                    if (!playbackPort.isEmpty() && m_cllsSlots[i].playbackPortSelect) {
+                        m_cllsSlots[i].playbackPortSelect->blockSignals(true);
+                        int pIdx = m_cllsSlots[i].playbackPortSelect->findData(playbackPort);
+                        if (pIdx >= 0) {
+                            m_cllsSlots[i].playbackPortSelect->setCurrentIndex(pIdx);
+                        }
+                        m_cllsSlots[i].playbackPortSelect->blockSignals(false);
+                    }
+                    if (!capturePort.isEmpty() && m_cllsSlots[i].capturePortSelect) {
+                        m_cllsSlots[i].capturePortSelect->blockSignals(true);
+                        int cIdx = m_cllsSlots[i].capturePortSelect->findData(capturePort);
+                        if (cIdx >= 0) {
+                            m_cllsSlots[i].capturePortSelect->setCurrentIndex(cIdx);
+                        }
+                        m_cllsSlots[i].capturePortSelect->blockSignals(false);
+                    }
+                }
             }
         }
     }
 
     // 2. Query PipeWire rate & quantum settings via pw-metadata
-    QProcess pwMeta;
-    if (flatpakMode) {
-        pwMeta.start("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings");
-    } else {
-        pwMeta.start("pw-metadata", QStringList() << "-n" << "settings");
-    }
-    pwMeta.waitForFinished(1000);
-    QString metaStdout = QString::fromUtf8(pwMeta.readAllStandardOutput());
-    
     unsigned int rate = 48000;
     unsigned int quantum = 128;
-    
-    QRegularExpression rateRegex("clock.rate\\s+value:'(\\d+)'");
-    QRegularExpression forceRateRegex("clock.force-rate\\s+value:'(\\d+)'");
-    QRegularExpression quantumRegex("clock.quantum\\s+value:'(\\d+)'");
-    QRegularExpression forceQuantumRegex("clock.force-quantum\\s+value:'(\\d+)'");
+    bool slaving = false;
 
-    auto getMatch = [](const QRegularExpression &regex, const QString &text) -> unsigned int {
-        QRegularExpressionMatch m = regex.match(text);
-        if (m.hasMatch()) {
-            return m.captured(1).toUInt();
+    QString configPath = QDir::homePath() + "/.config/arthur/audio_settings.json";
+    QFile file(configPath);
+    bool hasSavedConfig = false;
+    QJsonObject savedObj;
+    if (file.open(QIODevice::ReadOnly)) {
+        QByteArray data = file.readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (!doc.isNull() && doc.isObject()) {
+            savedObj = doc.object();
+            hasSavedConfig = true;
         }
-        return 0;
-    };
+        file.close();
+    }
 
-    unsigned int frate = getMatch(forceRateRegex, metaStdout);
-    unsigned int crate = getMatch(rateRegex, metaStdout);
-    rate = frate ? frate : (crate ? crate : 48000);
+    if (hasSavedConfig) {
+        if (savedObj.contains("sample_rate")) rate = savedObj["sample_rate"].toInt();
+        if (savedObj.contains("buffer_size")) quantum = savedObj["buffer_size"].toInt();
+        if (savedObj.contains("midi_slave")) slaving = savedObj["midi_slave"].toBool();
+    } else {
+        QProcess pwMeta;
+        if (flatpakMode) {
+            pwMeta.start("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings");
+        } else {
+            pwMeta.start("pw-metadata", QStringList() << "-n" << "settings");
+        }
+        pwMeta.waitForFinished(1000);
+        QString metaStdout = QString::fromUtf8(pwMeta.readAllStandardOutput());
+        
+        QRegularExpression rateRegex("clock.rate\\s+value:'(\\d+)'");
+        QRegularExpression forceRateRegex("clock.force-rate\\s+value:'(\\d+)'");
+        QRegularExpression quantumRegex("clock.quantum\\s+value:'(\\d+)'");
+        QRegularExpression forceQuantumRegex("clock.force-quantum\\s+value:'(\\d+)'");
 
-    unsigned int fquant = getMatch(forceQuantumRegex, metaStdout);
-    unsigned int cquant = getMatch(quantumRegex, metaStdout);
-    quantum = fquant ? fquant : (cquant ? cquant : 128);
+        auto getMatch = [](const QRegularExpression &regex, const QString &text) -> unsigned int {
+            QRegularExpressionMatch m = regex.match(text);
+            if (m.hasMatch()) {
+                return m.captured(1).toUInt();
+            }
+            return 0;
+        };
+
+        unsigned int frate = getMatch(forceRateRegex, metaStdout);
+        unsigned int crate = getMatch(rateRegex, metaStdout);
+        rate = frate ? frate : (crate ? crate : 48000);
+
+        unsigned int fquant = getMatch(forceQuantumRegex, metaStdout);
+        unsigned int cquant = getMatch(quantumRegex, metaStdout);
+        quantum = fquant ? fquant : (cquant ? cquant : 128);
+
+        // Slaving state
+        QProcess pgrep;
+        pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
+        pgrep.waitForFinished(500);
+        slaving = (pgrep.exitCode() == 0);
+    }
 
     m_activeSampleRate = rate;
 
     if (m_sampleRateSelect) {
+        m_sampleRateSelect->blockSignals(true);
         int idx = m_sampleRateSelect->findData(rate);
         if (idx >= 0) m_sampleRateSelect->setCurrentIndex(idx);
+        m_sampleRateSelect->blockSignals(false);
     }
     if (m_bufferSizeSelect) {
+        m_bufferSizeSelect->blockSignals(true);
         int idx = m_bufferSizeSelect->findData(quantum);
         if (idx >= 0) m_bufferSizeSelect->setCurrentIndex(idx);
+        m_bufferSizeSelect->blockSignals(false);
     }
 
-    // 3. Slaving state
-    QProcess pgrep;
-    pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
-    pgrep.waitForFinished(500);
-    bool slaving = (pgrep.exitCode() == 0);
     if (m_midiSlaveCheck) {
+        m_midiSlaveCheck->blockSignals(true);
         m_midiSlaveCheck->setChecked(slaving);
+        m_midiSlaveCheck->blockSignals(false);
     }
 
     m_isUpdatingConfig = false;
+
+    // Apply the loaded config to system
+    applyAudioConfig();
+
+    // If config file did not exist, write the current queried settings to create it
+    if (!hasSavedConfig) {
+        saveAudioConfig();
+    }
 }
 
 void MainWindow::applyAudioConfig() {
@@ -1220,6 +1326,54 @@ void MainWindow::applyAudioConfig() {
     }
 
     updateGlobalStatus("✓ Sync Active", "Audio settings updated successfully.", true);
+
+    // Save the config values since they have changed
+    saveAudioConfig();
+}
+
+void MainWindow::saveAudioConfig() {
+    if (m_isUpdatingConfig) return;
+
+    QString configDir = QDir::homePath() + "/.config/arthur";
+    QDir().mkpath(configDir);
+    QString path = configDir + "/audio_settings.json";
+
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly)) {
+        QJsonObject obj;
+        if (m_audioInterfaceSelect) {
+            obj["audio_interface"] = m_audioInterfaceSelect->currentData().toString();
+        }
+        if (m_sampleRateSelect) {
+            obj["sample_rate"] = static_cast<int>(m_sampleRateSelect->currentData().toUInt());
+        }
+        if (m_bufferSizeSelect) {
+            obj["buffer_size"] = static_cast<int>(m_bufferSizeSelect->currentData().toUInt());
+        }
+        if (m_midiSlaveCheck) {
+            obj["midi_slave"] = m_midiSlaveCheck->isChecked();
+        }
+
+        QJsonArray cllsArray;
+        for (int i = 0; i < 3; ++i) {
+            QJsonObject slotObj;
+            if (m_cllsSlots[i].interfaceSelect) {
+                slotObj["interface"] = m_cllsSlots[i].interfaceSelect->currentData().toString();
+            }
+            if (m_cllsSlots[i].playbackPortSelect) {
+                slotObj["playback_port"] = m_cllsSlots[i].playbackPortSelect->currentData().toString();
+            }
+            if (m_cllsSlots[i].capturePortSelect) {
+                slotObj["capture_port"] = m_cllsSlots[i].capturePortSelect->currentData().toString();
+            }
+            cllsArray.append(slotObj);
+        }
+        obj["clls_slots"] = cllsArray;
+
+        QJsonDocument doc(obj);
+        file.write(doc.toJson());
+        file.close();
+    }
 }
 
 // Static helper to resolve the exact input/capture interface name in PipeWire for a given output interface

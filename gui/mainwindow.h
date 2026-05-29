@@ -74,6 +74,7 @@ private slots:
     void readCllsOutput(int slotIdx);
     void handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitStatus status);
     void populatePortsForSlot(int slotIdx);
+    void saveAudioConfig();
 
     // Virtual DSP Rack
     void loadVdcProfiles();
