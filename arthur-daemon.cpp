@@ -89,7 +89,12 @@ int main() {
                     std::cout << ">>> Spawning Guest for: " << plugin_name << std::endl;
                     pid_t pid = fork();
                     if (pid == 0) {
-                        std::string guest_bin = "./build/arthur-guest.exe";
+                        std::string self_dir = ".";
+                        try {
+                            self_dir = fs::canonical("/proc/self/exe").parent_path().string();
+                        } catch (...) {}
+
+                        std::string guest_bin = self_dir + "/arthur-guest.exe";
                         if (access("/app/bin/arthur-guest.exe", F_OK) == 0) {
                             guest_bin = "/app/bin/arthur-guest.exe";
                         }

@@ -1101,7 +1101,7 @@ void MainWindow::applyAudioConfig() {
         pgrep.waitForFinished(500);
         if (pgrep.exitCode() != 0) {
             // Spawn midi_sync
-            QProcess::startDetached("./build/midi_sync", QStringList());
+            QProcess::startDetached(QCoreApplication::applicationDirPath() + "/midi_sync", QStringList());
         }
     } else {
         QProcess::execute("pkill", QStringList() << "-x" << "midi_sync");
@@ -1130,7 +1130,7 @@ void MainWindow::startCllsCalibration() {
     connect(m_cllsProcess, &QProcess::finished, this, &MainWindow::handleCllsFinished);
     
     // Spawn pw_module_clls
-    m_cllsProcess->start("./build/pw_module_clls");
+    m_cllsProcess->start(QCoreApplication::applicationDirPath() + "/pw_module_clls");
 
     updateGlobalStatus("⚡ Calibrating", "Spawning CLLS aligner...", true);
 
