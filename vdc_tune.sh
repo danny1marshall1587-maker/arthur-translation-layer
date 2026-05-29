@@ -202,6 +202,28 @@ for ESP in /boot /efi /boot/efi; do
     fi
 done
 
+# C. Try Limine (/boot/limine.conf)
+LIMINE_CONF="/boot/limine.conf"
+if [ "$BOOTLOADER_UPDATED" = false ] && [ -f "$LIMINE_CONF" ]; then
+    echo "[OK] Limine configuration file found at $LIMINE_CONF"
+    
+    if grep -q "$NEW_PARAMS" "$LIMINE_CONF"; then
+        echo "[OK] Core isolation parameters are already present in Limine."
+        BOOTLOADER_UPDATED=true
+    else
+        if [ "$DRY_RUN" = true ]; then
+            echo "=> [PROPOSED] Add parameters to Limine entries cmdline:"
+            echo "   $NEW_PARAMS"
+        else
+            echo "Adding isolation parameters to $LIMINE_CONF..."
+            # Modify all cmdline lines by appending the parameters
+            sed -i "s/\(^[[:space:]]*cmdline:.*\)/\1 $NEW_PARAMS/" "$LIMINE_CONF"
+            echo "[OK] Limine configuration updated."
+            BOOTLOADER_UPDATED=true
+        fi
+    fi
+fi
+
 if [ "$BOOTLOADER_UPDATED" = false ]; then
     echo "[WARNING] Could not identify or modify an active bootloader configuration."
     echo "If you are using an alternative bootloader (like rEFInd), please add the following parameters manually:"

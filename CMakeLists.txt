@@ -83,6 +83,10 @@ install(PROGRAMS
     DESTINATION bin
 )
 
+# Copy scripts to the build directory for local testing/running
+configure_file(vdc_tune.sh ${CMAKE_CURRENT_BINARY_DIR}/vdc_tune.sh COPYONLY)
+configure_file(arthur-installer-bridge.sh ${CMAKE_CURRENT_BINARY_DIR}/arthur-installer-bridge.sh COPYONLY)
+
 # Install desktop entry and icons for Flatpak system integration
 install(FILES org.arthur.TranslationLayer.desktop DESTINATION share/applications)
 install(FILES arthur.png DESTINATION share/pixmaps RENAME org.arthur.TranslationLayer.png)

@@ -2014,7 +2014,8 @@ void MainWindow::startInstaller(const QString &filePath) {
 
         m_installerProcess->start("flatpak-spawn", QStringList() << "--host" << "bash" << (configDir + "/arthur-installer-bridge.sh") << filePath);
     } else {
-        m_installerProcess->start("bash", QStringList() << "./arthur-installer-bridge.sh" << filePath);
+        QString scriptPath = QCoreApplication::applicationDirPath() + "/arthur-installer-bridge.sh";
+        m_installerProcess->start("bash", QStringList() << scriptPath << filePath);
     }
     
     connect(m_installerProcess, &QProcess::finished, this, &MainWindow::handleInstallerFinished);
@@ -2092,7 +2093,8 @@ void MainWindow::runSystemTuning() {
         
         m_tuningProcess->start("flatpak-spawn", QStringList() << "--host" << "pkexec" << "bash" << (configDir + "/vdc_tune.sh") << "--cores" << targetCores);
     } else {
-        m_tuningProcess->start("pkexec", QStringList() << "bash" << "./vdc_tune.sh" << "--cores" << targetCores);
+        QString scriptPath = QCoreApplication::applicationDirPath() + "/vdc_tune.sh";
+        m_tuningProcess->start("pkexec", QStringList() << "bash" << scriptPath << "--cores" << targetCores);
     }
 
     connect(m_tuningProcess, &QProcess::finished, this, &MainWindow::handleTuningFinished);
