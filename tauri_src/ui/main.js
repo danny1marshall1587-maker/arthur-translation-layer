@@ -199,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
             logToConsole(`[35%] Executing installer binary: ${filePath}`);
             logToConsole("Please complete the installer steps in the wizard window that opened.");
 
-            window.__TAURI__.invoke('install_vst_plugin', { installerPath: filePath })
+            window.__TAURI__.core.invoke('install_vst_plugin', { installerPath: filePath })
                 .then((result) => {
                     updateProgress(90, "Auto-bridging new plugins...");
                     logToConsole("[90%] Installer process exited successfully.");
@@ -303,7 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 }).then(fn => { unlisten = fn; });
 
-                window.__TAURI__.invoke('run_system_tuning', { cores: targetCores })
+                window.__TAURI__.core.invoke('run_system_tuning', { cores: targetCores })
                     .then((result) => {
                         updateSystemProgress(100, "Setup complete!");
                         systemConsoleLog.textContent += "\n[SUCCESS] System tuning completed.\n";

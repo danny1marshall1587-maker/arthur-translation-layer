@@ -2,6 +2,7 @@
 
 use serde::{Serialize, Deserialize};
 use std::process::Command;
+use tauri::Emitter;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct DspStatus {
@@ -160,6 +161,7 @@ fn run_system_tuning(window: tauri::Window, cores: String) -> Result<String, Str
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_dsp_status,
             load_vdc_profile,

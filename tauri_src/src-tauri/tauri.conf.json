@@ -1,29 +1,13 @@
 {
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "productName": "arthur-control-center",
+  "version": "3.0.1",
+  "identifier": "org.arthur.controlcenter",
   "build": {
-    "distDir": "../dist",
-    "devPath": "../ui",
-    "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "frontendDist": "../ui"
   },
-  "package": {
-    "productName": "arthur-control-center",
-    "version": "3.0.1"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": true
-    },
-    "bundle": {
-      "active": false,
-      "targets": "all",
-      "identifier": "org.arthur.controlcenter",
-      "icon": [
-        "../../arthur.png"
-      ]
-    },
-    "security": {
-      "csp": null
-    },
+  "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Arthur Control Center",
@@ -32,6 +16,13 @@
         "resizable": true,
         "fullscreen": false
       }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": [
+      "../../arthur.png"
     ]
   }
 }
