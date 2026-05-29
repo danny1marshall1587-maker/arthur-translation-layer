@@ -80,6 +80,12 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
+    // Dismantle (unload) all background preloaded guest VST instances on isolated cores
+    for (const QString &shmName : m_activePreloadedShms) {
+        sendDaemonCommand(QString("UNLOAD %1").arg(shmName));
+    }
+    m_activePreloadedShms.clear();
+
     for (int i = 0; i < 3; ++i) {
         if (m_cllsSlots[i].process) {
             m_cllsSlots[i].process->kill();
@@ -1781,6 +1787,39 @@ void MainWindow::loadProfile(const QString &name) {
             if (idx >= 0) m_bufferSizeSelect->setCurrentIndex(idx);
         }
         renderRackGrid();
+
+        // Auto setup core preloads on profile load
+        QStringList newActiveShms;
+        for (const VdcSlot &slot : m_currentProfile.vdc_slots) {
+            if (slot.active && !slot.vst3_dll_path.isEmpty()) {
+                QString shmName = QString("arthur_%1_slot_%2").arg(slot.vst3_dll_path).arg(slot.slot_id);
+                newActiveShms.append(shmName);
+
+                if (!m_activePreloadedShms.contains(shmName)) {
+                    QString msg = QString("LOAD %1 %2").arg(shmName).arg(slot.vst3_dll_path);
+                    sendDaemonCommand(msg);
+                }
+            }
+        }
+
+        // Dismantle old preloads not present/active in the new profile
+        for (const QString &prevShm : m_activePreloadedShms) {
+            if (!newActiveShms.contains(prevShm)) {
+                QString msg = QString("UNLOAD %1").arg(prevShm);
+                sendDaemonCommand(msg);
+            }
+        }
+
+        m_activePreloadedShms = newActiveShms;
+    }
+}
+
+void MainWindow::sendDaemonCommand(const QString &cmd) {
+    QLocalSocket socket;
+    socket.connectToServer("/tmp/arthur.sock");
+    if (socket.waitForConnected(200)) {
+        socket.write(cmd.toUtf8());
+        socket.waitForBytesWritten(200);
     }
 }
 
@@ -1839,26 +1878,6 @@ void MainWindow::onProfileChanged(const QString &profileName) {
 void MainWindow::saveCurrentProfile() {
     QString path = QDir::homePath() + QString("/.config/arthur/profiles/%1.vdcp").arg(m_currentProfile.profile_name);
     
-    // Find previously active slots to unload if they are no longer active/present
-    QStringList prevActiveShms;
-    QFile oldFile(path);
-    if (oldFile.open(QIODevice::ReadOnly)) {
-        QJsonDocument oldDoc = QJsonDocument::fromJson(oldFile.readAll());
-        QJsonObject oldObj = oldDoc.object();
-        QJsonArray oldSlots = oldObj["slots"].toArray();
-        for (int i = 0; i < oldSlots.size(); ++i) {
-            QJsonObject slotObj = oldSlots[i].toObject();
-            if (slotObj["active"].toBool()) {
-                QString dll = slotObj["vst3_dll_path"].toString();
-                int id = slotObj["slot_id"].toInt();
-                if (!dll.isEmpty()) {
-                    prevActiveShms.append(QString("arthur_%1_slot_%2").arg(dll).arg(id));
-                }
-            }
-        }
-        oldFile.close();
-    }
-
     QFile file(path);
     if (file.open(QIODevice::WriteOnly)) {
         QJsonObject obj;
@@ -1882,13 +1901,9 @@ void MainWindow::saveCurrentProfile() {
                 QString shmName = QString("arthur_%1_slot_%2").arg(slot.vst3_dll_path).arg(slot.slot_id);
                 newActiveShms.append(shmName);
                 
-                QString msg = QString("LOAD %1 %2").arg(shmName).arg(slot.vst3_dll_path);
-                
-                QLocalSocket socket;
-                socket.connectToServer("/tmp/arthur.sock");
-                if (socket.waitForConnected(200)) {
-                    socket.write(msg.toUtf8());
-                    socket.waitForBytesWritten(200);
+                if (!m_activePreloadedShms.contains(shmName)) {
+                    QString msg = QString("LOAD %1 %2").arg(shmName).arg(slot.vst3_dll_path);
+                    sendDaemonCommand(msg);
                 }
             }
         }
@@ -1899,17 +1914,15 @@ void MainWindow::saveCurrentProfile() {
         file.close();
 
         // Send UNLOAD commands for any preloaded instances that were disabled or deleted
-        for (const QString &prevShm : prevActiveShms) {
+        for (const QString &prevShm : m_activePreloadedShms) {
             if (!newActiveShms.contains(prevShm)) {
-                QLocalSocket socket;
-                socket.connectToServer("/tmp/arthur.sock");
-                if (socket.waitForConnected(200)) {
-                    QString msg = QString("UNLOAD %1").arg(prevShm);
-                    socket.write(msg.toUtf8());
-                    socket.waitForBytesWritten(200);
-                }
+                QString msg = QString("UNLOAD %1").arg(prevShm);
+                sendDaemonCommand(msg);
             }
         }
+
+        // Update tracking
+        m_activePreloadedShms = newActiveShms;
 
         updateGlobalStatus("✓ Saved Profile", QString("Profile '%1' saved and synced successfully.").arg(m_currentProfile.profile_name), true);
     }

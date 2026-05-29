@@ -100,6 +100,7 @@ private:
     void setupGlobalStylesheet();
     void ensureDaemonRunning();
     void loadProfile(const QString &name);
+    void sendDaemonCommand(const QString &cmd);
     QList<QString> scanInstalledVst3Plugins();
     QList<QString> queryPipeWirePorts();
     void updateMidiSyncCard(bool active);
@@ -108,6 +109,7 @@ private:
     // --- State variables ---
     VdcProfile m_currentProfile;
     QList<QString> m_availableProfiles;
+    QStringList m_activePreloadedShms;
     unsigned int m_activeSampleRate;
     bool m_isUpdatingConfig;
 
