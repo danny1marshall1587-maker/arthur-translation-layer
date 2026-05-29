@@ -21,7 +21,7 @@
       "name": "arthur-backend",
       "buildsystem": "simple",
       "build-commands": [
-        "mkdir -p build && cd build && cmake .. && make && make install"
+        "mkdir -p build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/app .. && make && make install"
       ],
       "sources": [
         {
