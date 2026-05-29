@@ -1305,15 +1305,15 @@ void MainWindow::startCllsCalibration(int slotIdx) {
         // Link
         bool flatpakMode = QFile::exists("/.flatpak-info");
         if (flatpakMode) {
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_0").arg(alignerName) << outputPort);
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_0").arg(alignerName));
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_1").arg(alignerName));
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_2").arg(alignerName));
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
         } else {
-            QProcess::execute("pw-link", QStringList() << QString("%1:output_0").arg(alignerName) << outputPort);
-            QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_0").arg(alignerName));
-            QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_1").arg(alignerName));
-            QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_2").arg(alignerName));
+            QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
+            QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
+            QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
+            QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
         }
     });
 }
