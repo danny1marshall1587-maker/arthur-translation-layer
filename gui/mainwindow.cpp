@@ -1046,9 +1046,15 @@ void MainWindow::updateMidiSyncCard(bool active) {
 void MainWindow::loadAudioConfig() {
     m_isUpdatingConfig = true;
 
+    bool flatpakMode = QFile::exists("/.flatpak-info");
+
     // 1. Get sound interfaces via pactl
     QProcess pactl;
-    pactl.start("pactl", QStringList() << "list" << "sinks");
+    if (flatpakMode) {
+        pactl.start("flatpak-spawn", QStringList() << "--host" << "pactl" << "list" << "sinks");
+    } else {
+        pactl.start("pactl", QStringList() << "list" << "sinks");
+    }
     pactl.waitForFinished(1000);
     
     QString activeInterface = "";
@@ -1075,7 +1081,11 @@ void MainWindow::loadAudioConfig() {
 
         // Get default sink
         QProcess pactlDef;
-        pactlDef.start("pactl", QStringList() << "get-default-sink");
+        if (flatpakMode) {
+            pactlDef.start("flatpak-spawn", QStringList() << "--host" << "pactl" << "get-default-sink");
+        } else {
+            pactlDef.start("pactl", QStringList() << "get-default-sink");
+        }
         pactlDef.waitForFinished(500);
         activeInterface = QString::fromUtf8(pactlDef.readAllStandardOutput()).trimmed();
         int idx = m_audioInterfaceSelect->findData(activeInterface);
@@ -1107,7 +1117,11 @@ void MainWindow::loadAudioConfig() {
 
     // 2. Query PipeWire rate & quantum settings via pw-metadata
     QProcess pwMeta;
-    pwMeta.start("pw-metadata", QStringList() << "-n" << "settings");
+    if (flatpakMode) {
+        pwMeta.start("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings");
+    } else {
+        pwMeta.start("pw-metadata", QStringList() << "-n" << "settings");
+    }
     pwMeta.waitForFinished(1000);
     QString metaStdout = QString::fromUtf8(pwMeta.readAllStandardOutput());
     
@@ -1168,14 +1182,28 @@ void MainWindow::applyAudioConfig() {
 
     m_activeSampleRate = rate;
 
+    bool flatpakMode = QFile::exists("/.flatpak-info");
+
     // Set default sink
-    QProcess::execute("pactl", QStringList() << "set-default-sink" << interface);
+    if (flatpakMode) {
+        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pactl" << "set-default-sink" << interface);
+    } else {
+        QProcess::execute("pactl", QStringList() << "set-default-sink" << interface);
+    }
 
     // Set force-rate
-    QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+    if (flatpakMode) {
+        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+    } else {
+        QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+    }
 
     // Set force-quantum
-    QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+    if (flatpakMode) {
+        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+    } else {
+        QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+    }
 
     // Slaving daemon control
     if (slaveMidi) {
@@ -1274,10 +1302,18 @@ void MainWindow::startCllsCalibration(int slotIdx) {
         QString anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
 
         // Link
-        QProcess::execute("pw-link", QStringList() << QString("%1:output_0").arg(alignerName) << outputPort);
-        QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_0").arg(alignerName));
-        QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_1").arg(alignerName));
-        QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_2").arg(alignerName));
+        bool flatpakMode = QFile::exists("/.flatpak-info");
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_0").arg(alignerName) << outputPort);
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_0").arg(alignerName));
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_1").arg(alignerName));
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_2").arg(alignerName));
+        } else {
+            QProcess::execute("pw-link", QStringList() << QString("%1:output_0").arg(alignerName) << outputPort);
+            QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_0").arg(alignerName));
+            QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_1").arg(alignerName));
+            QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_2").arg(alignerName));
+        }
     });
 }
 
@@ -1373,17 +1409,26 @@ void MainWindow::populatePortsForSlot(int slotIdx) {
         QString inputInterface = getMatchingInputInterface(activeInterface, allPorts);
 
         for (const QString &port : allPorts) {
+            // Playback Ports
             if (port.startsWith(activeInterface) && port.contains("playback")) {
                 QString displayName = port;
                 int colonIdx = port.indexOf(':');
                 if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
                 slot.playbackPortSelect->addItem(displayName, port);
             }
+            // Capture (physical mic/line) Ports
             if (port.startsWith(inputInterface) && port.contains("capture")) {
                 QString displayName = port;
                 int colonIdx = port.indexOf(':');
                 if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
                 slot.capturePortSelect->addItem(displayName, port);
+            }
+            // Monitor (loopback) Ports
+            if (port.startsWith(activeInterface) && port.contains("monitor")) {
+                QString displayName = port;
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                slot.capturePortSelect->addItem(displayName + " (Loopback)", port);
             }
         }
     }
@@ -1429,22 +1474,54 @@ QList<QString> MainWindow::scanInstalledVst3Plugins() {
 QList<QString> MainWindow::queryPipeWirePorts() {
     QList<QString> ports;
     QProcess link;
-    link.start("pw-link", QStringList() << "-io");
+    bool flatpakMode = QFile::exists("/.flatpak-info");
+    if (flatpakMode) {
+        link.start("flatpak-spawn", QStringList() << "--host" << "pw-link" << "-io");
+    } else {
+        link.start("pw-link", QStringList() << "-io");
+    }
     link.waitForFinished(1000);
     QString stdoutStr = QString::fromUtf8(link.readAllStandardOutput());
     QTextStream stream(&stdoutStr);
     while (!stream.atEnd()) {
         QString line = stream.readLine().trimmed();
-        if (!line.isEmpty()) {
+        if (!line.isEmpty() && line.contains(':')) {
             ports.append(line);
         }
     }
-    // Fallbacks
+    // Fallbacks if empty
     if (ports.isEmpty()) {
+        // EVO4 Pro Playback, Capture, Monitor (all 4 channels)
         ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0");
         ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX1");
+        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX2");
+        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX3");
+        
         ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0");
         ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX1");
+        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX2");
+        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX3");
+
+        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX0");
+        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX1");
+        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX2");
+        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX3");
+
+        // HeadRush Flex Prime (all 4 channels)
+        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_FL");
+        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_FR");
+        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_RL");
+        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_RR");
+
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_FL");
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_FR");
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_RL");
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_RR");
+
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_FL");
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_FR");
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_RL");
+        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_RR");
     }
     return ports;
 }
