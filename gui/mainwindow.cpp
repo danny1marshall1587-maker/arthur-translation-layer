@@ -804,6 +804,8 @@ void MainWindow::initUi() {
     hAction->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
     QLabel *hStatus = new QLabel("Latency", cllsTimingsCard);
     hStatus->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hLink = new QLabel("Link Status", cllsTimingsCard);
+    hLink->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
 
     cllsGrid->addWidget(hSlot, 0, 0);
     cllsGrid->addWidget(hInterface, 0, 1);
@@ -811,6 +813,7 @@ void MainWindow::initUi() {
     cllsGrid->addWidget(hIn, 0, 3);
     cllsGrid->addWidget(hAction, 0, 4);
     cllsGrid->addWidget(hStatus, 0, 5);
+    cllsGrid->addWidget(hLink, 0, 6);
 
     for (int i = 0; i < 3; ++i) {
         QLabel *slotLabel = new QLabel(QString("Slot %1").arg(i + 1), cllsTimingsCard);
@@ -838,12 +841,18 @@ void MainWindow::initUi() {
         m_cllsSlots[i].rttValLabel = new QLabel("-- smp", cllsTimingsCard);
         m_cllsSlots[i].rttValLabel->setStyleSheet("font-weight: 600; font-size: 11px; color: #a0a5b5;");
 
+        m_cllsSlots[i].statusBadge = new QLabel("Disconnected", cllsTimingsCard);
+        m_cllsSlots[i].statusBadge->setStyleSheet("background-color: rgba(255,255,255,0.05); color: #a0a5b5; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+        m_cllsSlots[i].statusBadge->setAlignment(Qt::AlignCenter);
+        m_cllsSlots[i].statusBadge->setFixedWidth(80);
+
         cllsGrid->addWidget(slotLabel, i + 1, 0);
         cllsGrid->addWidget(m_cllsSlots[i].interfaceSelect, i + 1, 1);
         cllsGrid->addWidget(m_cllsSlots[i].playbackPortSelect, i + 1, 2);
         cllsGrid->addWidget(m_cllsSlots[i].capturePortSelect, i + 1, 3);
         cllsGrid->addWidget(m_cllsSlots[i].runBtn, i + 1, 4);
         cllsGrid->addWidget(m_cllsSlots[i].rttValLabel, i + 1, 5);
+        cllsGrid->addWidget(m_cllsSlots[i].statusBadge, i + 1, 6);
 
         // Connect interface select change to populate ports and auto-save
         connect(m_cllsSlots[i].interfaceSelect, &QComboBox::currentIndexChanged, this, [=]() {
@@ -1435,9 +1444,13 @@ void MainWindow::startCllsCalibration(int slotIdx) {
     slot.runBtn->setText("Stop");
     slot.runBtn->setStyleSheet("background-color: #ff3b30; padding: 4px 8px; font-size: 11px; border-radius: 6px;");
 
+    slot.statusBadge->setText("Connecting...");
+    slot.statusBadge->setStyleSheet("background-color: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+
     QString alignerName = QString("CLLS-Aligner-%1").arg(slotIdx + 1);
 
     slot.process = new QProcess(this);
+    slot.process->setProcessChannelMode(QProcess::MergedChannels);
     connect(slot.process, &QProcess::readyReadStandardOutput, this, [=]() { readCllsOutput(slotIdx); });
     connect(slot.process, &QProcess::finished, this, [=](int exitCode, QProcess::ExitStatus status) {
         handleCllsFinished(slotIdx, exitCode, status);
@@ -1463,17 +1476,28 @@ void MainWindow::startCllsCalibration(int slotIdx) {
         QString anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
 
         // Link
+        int code1 = -1;
+        int code2 = -1;
         bool flatpakMode = QFile::exists("/.flatpak-info");
         if (flatpakMode) {
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
+            code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
+            code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
             QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
             QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
         } else {
-            QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
-            QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
+            code1 = QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
+            code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
             QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
             QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
+        }
+
+        if (code1 == 0 && code2 == 0) {
+            slot.statusBadge->setText("Linked");
+            slot.statusBadge->setStyleSheet("background-color: rgba(48,209,88,0.15); color: #30d158; border: 1px solid rgba(48,209,88,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+        } else {
+            slot.statusBadge->setText("Link Error");
+            slot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+            updateGlobalStatus("⚠ Link Error", QString("pw-link failed to route Slot %1. Check audio configurations.").arg(slotIdx + 1), false);
         }
     });
 }
@@ -1526,7 +1550,6 @@ void MainWindow::readCllsOutput(int slotIdx) {
 }
 
 void MainWindow::handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitStatus status) {
-    Q_UNUSED(exitCode);
     Q_UNUSED(status);
     if (slotIdx < 0 || slotIdx >= 3) return;
     CllsSlot &slot = m_cllsSlots[slotIdx];
@@ -1538,6 +1561,14 @@ void MainWindow::handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitSta
     slot.runBtn->style()->unpolish(slot.runBtn);
     slot.runBtn->style()->polish(slot.runBtn);
     slot.rttValLabel->setText("-- smp");
+
+    if (exitCode != 0) {
+        slot.statusBadge->setText(QString("Error (%1)").arg(exitCode));
+        slot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+    } else {
+        slot.statusBadge->setText("Disconnected");
+        slot.statusBadge->setStyleSheet("background-color: rgba(255,255,255,0.05); color: #a0a5b5; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+    }
 
     if (slotIdx == 0) {
         if (m_cllsStatusBadge) {
