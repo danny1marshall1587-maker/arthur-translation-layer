@@ -16,14 +16,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -31,15 +23,10 @@ jobs:
             libasound2-dev \
             libpipewire-0.3-dev \
             libspa-0.2-dev \
-            libwebkit2gtk-4.1-dev \
             build-essential \
             curl \
             wget \
             file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
             libwine-dev \
             wine
 
@@ -53,31 +40,11 @@ jobs:
           git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git vst3_headers/pluginterfaces
           git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git vst3_headers/base
 
-      - name: Install Node dependencies and build frontend
-        run: |
-          cd tauri_src
-          # Clean conflicting global cargo-tauri binaries from path
-          rm -f /home/runner/.cargo/bin/cargo-tauri || true
-          rm -f /home/runner/.cargo/bin/tauri || true
-          npm install
-          # Build frontend assets
-          mkdir -p dist
-          cp ui/* dist/ || true
-
-      - name: Build Tauri Desktop Application
-        run: |
-          cd tauri_src
-          # Run Tauri build (compiles the Rust backend)
-          ./node_modules/.bin/tauri build --no-bundle
-          cd ..
-          mkdir -p bin
-          cp tauri_src/src-tauri/target/release/arthur-control-center bin/
-
       - name: Build C++ Host Bridge & Daemons
         run: |
           mkdir -p build
           cd build
-          cmake ..
+          cmake -DBUILD_GUI=OFF ..
           make -j$(nproc)
 
       - name: Build Wine Guest and Agent Binaries

@@ -28,7 +28,7 @@ jobs:
 
     - name: Configure & Build Bridge (Linux side)
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=OFF
         cmake --build build --config Release -j$(nproc)
 
     - name: Setup AppDir (Standalone Arthur)

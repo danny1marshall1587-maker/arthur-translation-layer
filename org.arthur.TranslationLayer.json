@@ -1,8 +1,8 @@
 {
   "app-id": "org.arthur.TranslationLayer",
-  "runtime": "org.gnome.Platform",
-  "runtime-version": "45",
-  "sdk": "org.gnome.Sdk",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.6",
+  "sdk": "org.kde.Sdk",
   "command": "arthur-control-center",
   "finish-args": [
     "--socket=wayland",
