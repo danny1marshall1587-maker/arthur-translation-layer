@@ -63,7 +63,7 @@ struct AudioSharedMemory {
  */
 class AudioTransport {
 public:
-    AudioTransport() : shm_ptr_(nullptr), fd_(-1) {}
+    AudioTransport() : shm_ptr_(nullptr), fd_(-1), is_owner_(false) {}
     
     ~AudioTransport() {
         detach();
@@ -85,6 +85,7 @@ public:
         }
 
         shm_ptr_->state.store(TransportState::STATE_IDLE);
+        is_owner_ = true;
         return true;
     }
 
@@ -100,6 +101,7 @@ public:
             shm_ptr_ = nullptr;
             return false;
         }
+        is_owner_ = false;
         return true;
     }
 
@@ -113,7 +115,9 @@ public:
             fd_ = -1;
         }
         if (!name_.empty()) {
-            shm_unlink(name_.c_str());
+            if (is_owner_) {
+                shm_unlink(name_.c_str());
+            }
             name_ = "";
         }
     }
@@ -124,6 +128,7 @@ private:
     AudioSharedMemory* shm_ptr_;
     int fd_;
     std::string name_;
+    bool is_owner_;
 };
 #endif
 

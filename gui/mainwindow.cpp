@@ -1686,6 +1686,27 @@ void MainWindow::onProfileChanged(const QString &profileName) {
 
 void MainWindow::saveCurrentProfile() {
     QString path = QDir::homePath() + QString("/.config/arthur/profiles/%1.vdcp").arg(m_currentProfile.profile_name);
+    
+    // Find previously active slots to unload if they are no longer active/present
+    QStringList prevActiveShms;
+    QFile oldFile(path);
+    if (oldFile.open(QIODevice::ReadOnly)) {
+        QJsonDocument oldDoc = QJsonDocument::fromJson(oldFile.readAll());
+        QJsonObject oldObj = oldDoc.object();
+        QJsonArray oldSlots = oldObj["slots"].toArray();
+        for (int i = 0; i < oldSlots.size(); ++i) {
+            QJsonObject slotObj = oldSlots[i].toObject();
+            if (slotObj["active"].toBool()) {
+                QString dll = slotObj["vst3_dll_path"].toString();
+                int id = slotObj["slot_id"].toInt();
+                if (!dll.isEmpty()) {
+                    prevActiveShms.append(QString("arthur_%1_slot_%2").arg(dll).arg(id));
+                }
+            }
+        }
+        oldFile.close();
+    }
+
     QFile file(path);
     if (file.open(QIODevice::WriteOnly)) {
         QJsonObject obj;
@@ -1694,6 +1715,7 @@ void MainWindow::saveCurrentProfile() {
         obj["sample_rate"] = static_cast<int>(m_currentProfile.sample_rate);
         obj["buffer_size"] = static_cast<int>(m_currentProfile.buffer_size);
 
+        QStringList newActiveShms;
         QJsonArray slotsArr;
         for (const VdcSlot &slot : m_currentProfile.vdc_slots) {
             QJsonObject slotObj;
@@ -1705,9 +1727,11 @@ void MainWindow::saveCurrentProfile() {
             slotObj["output_destination"] = slot.output_destination;
             slotsArr.append(slotObj);
 
-            // Notify arthur-daemon client load for active VST guest slots
-            if (slot.active) {
-                QString shmName = QString("arthur_%1").arg(slot.vst3_dll_path);
+            // Notify arthur-daemon client load for active VST guest slots using slot-based naming
+            if (slot.active && !slot.vst3_dll_path.isEmpty()) {
+                QString shmName = QString("arthur_%1_slot_%2").arg(slot.vst3_dll_path).arg(slot.slot_id);
+                newActiveShms.append(shmName);
+                
                 QString msg = QString("LOAD %1 %2").arg(shmName).arg(slot.vst3_dll_path);
                 
                 QLocalSocket socket;
@@ -1723,6 +1747,19 @@ void MainWindow::saveCurrentProfile() {
         QJsonDocument doc(obj);
         file.write(doc.toJson());
         file.close();
+
+        // Send UNLOAD commands for any preloaded instances that were disabled or deleted
+        for (const QString &prevShm : prevActiveShms) {
+            if (!newActiveShms.contains(prevShm)) {
+                QLocalSocket socket;
+                socket.connectToServer("/tmp/arthur.sock");
+                if (socket.waitForConnected(200)) {
+                    QString msg = QString("UNLOAD %1").arg(prevShm);
+                    socket.write(msg.toUtf8());
+                    socket.waitForBytesWritten(200);
+                }
+            }
+        }
 
         updateGlobalStatus("✓ Saved Profile", QString("Profile '%1' saved and synced successfully.").arg(m_currentProfile.profile_name), true);
     }

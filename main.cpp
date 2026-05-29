@@ -85,6 +85,9 @@ private:
 class SimpleProcessor : public Vst::IAudioProcessor {
 public:
     SimpleProcessor() : ref_count(1), layout(nullptr) {}
+    ~SimpleProcessor() {
+        disconnectFromDaemon();
+    }
     tresult PLUGIN_API queryInterface(const TUID _iid, void** obj) override {
         if (memcmp(_iid, Vst::IAudioProcessor::iid, 16) == 0 || memcmp(_iid, FUnknown::iid, 16) == 0) {
             *obj = (Vst::IAudioProcessor*)this; addRef(); return kResultOk;
@@ -103,7 +106,11 @@ public:
         return kResultOk; 
     }
     tresult PLUGIN_API setProcessing(TBool state) override { 
-        if (state) connectToDaemon();
+        if (state) {
+            connectToDaemon();
+        } else {
+            disconnectFromDaemon();
+        }
         return kResultOk; 
     }
 
@@ -164,31 +171,74 @@ public:
 private:
     void connectToDaemon() {
         if (layout) return;
-        
-        std::string shm_name = "arthur_" + std::string(g_plugin_name);
-        
-        // Create the shared memory transport
-        if (!shm_transport.create(shm_name)) {
-            std::cerr << "[ERROR] Arthur Host failed to create shared memory: " << shm_name << std::endl;
+
+        int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (sock == -1) return;
+
+        struct sockaddr_un addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, "/tmp/arthur.sock", sizeof(addr.sun_path)-1);
+
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+            close(sock);
+            std::cerr << "[ERROR] Arthur Host failed to connect to daemon socket." << std::endl;
             return;
         }
-        
-        layout = shm_transport.get();
+
+        std::string msg = "GET_SHM " + std::string(g_plugin_name);
+        send(sock, msg.c_str(), msg.length(), 0);
+
+        char buffer[256];
+        int bytes = recv(sock, buffer, sizeof(buffer)-1, 0);
+        close(sock);
+
+        if (bytes <= 0) {
+            std::cerr << "[ERROR] Arthur Host received empty response from daemon." << std::endl;
+            return;
+        }
+        buffer[bytes] = '\0';
+        std::string resp(buffer);
+
+        if (resp.find("SHM ") == 0) {
+            std::string shm_name = resp.substr(4);
+
+            if (!shm_transport.attach(shm_name)) {
+                std::cerr << "[ERROR] Arthur Host failed to attach to shared memory: " << shm_name << std::endl;
+                return;
+            }
+
+            layout = shm_transport.get();
+            if (layout) {
+                shm_name_used = shm_name;
+                std::cout << "[OK] Arthur Host attached to: " << shm_name << std::endl;
+            }
+        } else {
+            std::cerr << "[ERROR] Arthur Host received error response from daemon: " << resp << std::endl;
+        }
+    }
+
+    void disconnectFromDaemon() {
         if (!layout) return;
 
-        // Notify daemon to spawn the guest for this plugin
-        int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (sock != -1) {
-            struct sockaddr_un addr;
-            memset(&addr, 0, sizeof(addr));
-            addr.sun_family = AF_UNIX;
-            strncpy(addr.sun_path, "/tmp/arthur.sock", sizeof(addr.sun_path)-1);
-            if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) != -1) {
-                std::string msg = "LOAD " + shm_name + " " + std::string(g_plugin_name);
-                send(sock, msg.c_str(), msg.length(), 0);
+        if (!shm_name_used.empty()) {
+            int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (sock != -1) {
+                struct sockaddr_un addr;
+                memset(&addr, 0, sizeof(addr));
+                addr.sun_family = AF_UNIX;
+                strncpy(addr.sun_path, "/tmp/arthur.sock", sizeof(addr.sun_path)-1);
+                if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) != -1) {
+                    std::string msg = "RELEASE " + shm_name_used;
+                    send(sock, msg.c_str(), msg.length(), 0);
+                }
+                close(sock);
             }
-            close(sock);
+            shm_name_used = "";
         }
+
+        shm_transport.detach();
+        layout = nullptr;
     }
 
     uint32 ref_count;
@@ -196,6 +246,7 @@ private:
     int32 maxSamplesPerBlock;
     arthur::AudioTransport shm_transport;
     arthur::AudioSharedMemory* layout;
+    std::string shm_name_used;
 };
 
 class SimpleFactory : public IPluginFactory2 {
