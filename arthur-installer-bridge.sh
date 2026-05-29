@@ -11,10 +11,13 @@ BRIDGE_SRC_DIR="$(pwd)"
 if [ -f "/.flatpak-info" ] || [ -d "/app" ]; then
     BRIDGE_SO_PATH="/app/lib/arthur_bridge.so"
 else
-    BRIDGE_SO_PATH="$BRIDGE_SRC_DIR/build/arthur_bridge.so"
-    if [ ! -f "$BRIDGE_SO_PATH" ]; then
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/arthur_bridge.so" ]; then
+        BRIDGE_SO_PATH="$SCRIPT_DIR/arthur_bridge.so"
+    elif [ -f "$SCRIPT_DIR/build/arthur_bridge.so" ]; then
         BRIDGE_SO_PATH="$SCRIPT_DIR/build/arthur_bridge.so"
+    else
+        BRIDGE_SO_PATH="$BRIDGE_SRC_DIR/build/arthur_bridge.so"
     fi
 fi
 

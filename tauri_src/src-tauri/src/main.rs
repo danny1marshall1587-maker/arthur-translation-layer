@@ -35,16 +35,68 @@ fn load_vdc_profile(profile_path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn install_vst_plugin(installer_path: String) -> Result<String, String> {
-    let script_path = if std::path::Path::new("/app/bin/arthur-installer-bridge.sh").exists() {
-        "/app/bin/arthur-installer-bridge.sh"
+    let flatpak_mode = std::path::Path::new("/.flatpak-info").exists();
+    
+    let script_path_on_host = if flatpak_mode {
+        let home = std::env::var("HOME").map_err(|_| "Could not find HOME environment variable".to_string())?;
+        let target_dir = format!("{}/.config/arthur", home);
+        std::fs::create_dir_all(&target_dir).map_err(|e| format!("Failed to create config dir: {}", e))?;
+        
+        let dest_script_path = format!("{}/arthur-installer-bridge.sh", target_dir);
+        let src_script_path = "/app/bin/arthur-installer-bridge.sh";
+        if std::path::Path::new(src_script_path).exists() {
+            std::fs::copy(src_script_path, &dest_script_path).map_err(|e| format!("Failed to copy installer script to host: {}", e))?;
+        } else {
+            // Fallback for local testing
+            let src_script_local = "./arthur-installer-bridge.sh";
+            if std::path::Path::new(src_script_local).exists() {
+                std::fs::copy(src_script_local, &dest_script_path).map_err(|e| format!("Failed to copy local script to host: {}", e))?;
+            } else {
+                return Err("arthur-installer-bridge.sh not found inside flatpak or local path".to_string());
+            }
+        }
+
+        // Copy the arthur_bridge.so library to host config dir so the host script can copy it to ~/.vst3/
+        let dest_lib_path = format!("{}/arthur_bridge.so", target_dir);
+        let src_lib_path = "/app/lib/arthur_bridge.so";
+        if std::path::Path::new(src_lib_path).exists() {
+            std::fs::copy(src_lib_path, &dest_lib_path).map_err(|e| format!("Failed to copy arthur_bridge.so to host: {}", e))?;
+        } else {
+            let src_lib_local = "./build/arthur_bridge.so";
+            if std::path::Path::new(src_lib_local).exists() {
+                std::fs::copy(src_lib_local, &dest_lib_path).map_err(|e| format!("Failed to copy local arthur_bridge.so to host: {}", e))?;
+            }
+        }
+
+        dest_script_path
     } else {
-        "./arthur-installer-bridge.sh"
+        if std::path::Path::new("/app/bin/arthur-installer-bridge.sh").exists() {
+            "/app/bin/arthur-installer-bridge.sh".to_string()
+        } else if std::path::Path::new("./arthur-installer-bridge.sh").exists() {
+            "./arthur-installer-bridge.sh".to_string()
+        } else {
+            "./arthur-installer-bridge.sh".to_string()
+        }
     };
 
-    // Invoke our auto-bridging script
-    let output = Command::new(script_path)
-        .arg(&installer_path)
-        .output();
+    // Invoke our auto-bridging script.
+    // If flatpak_mode: flatpak-spawn --host bash <script_path_on_host> <installer_path>
+    // Else: bash <script_path_on_host> <installer_path>
+    let mut cmd = if flatpak_mode {
+        let mut c = Command::new("flatpak-spawn");
+        c.arg("--host")
+         .arg("bash")
+         .arg(&script_path_on_host)
+         .arg(&installer_path);
+        c
+    } else {
+        let mut c = Command::new("bash");
+        c.arg(&script_path_on_host)
+         .arg(&installer_path);
+        c
+    };
+
+    let output = cmd.output();
     
     match output {
         Ok(out) => {
