@@ -3,6 +3,8 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+export PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
+
 CORES="4-7"
 DRY_RUN=false
 

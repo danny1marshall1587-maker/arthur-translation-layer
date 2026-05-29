@@ -19,6 +19,7 @@
 #include <QPainter>
 #include <QMimeData>
 #include <QDirIterator>
+#include <QScrollArea>
 
 // =============================================================================
 // DropZoneWidget Implementation
@@ -1738,194 +1739,201 @@ void MainWindow::renderRackGrid() {
         delete m_rackGridWidget->layout();
     }
 
-    QHBoxLayout *gridOuter = new QHBoxLayout(m_rackGridWidget);
-    gridOuter->setSpacing(20);
-    gridOuter->setContentsMargins(0, 0, 0, 0);
+    QVBoxLayout *layout = new QVBoxLayout(m_rackGridWidget);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
 
-    QStringList channels = {"CH 1 INSERTS", "CH 2 INSERTS", "CH 3 INSERTS"};
-    for (const QString &ch : channels) {
-        QFrame *chCol = new QFrame(m_rackGridWidget);
-        chCol->setProperty("class", "card");
-        QVBoxLayout *chColLayout = new QVBoxLayout(chCol);
-        chColLayout->setContentsMargins(10, 10, 10, 10);
-        chColLayout->setSpacing(8);
+    // Header Row with title and Add button
+    QHBoxLayout *headerLayout = new QHBoxLayout();
+    QLabel *lblTitle = new QLabel("Active Solo DSP Instances", m_rackGridWidget);
+    lblTitle->setStyleSheet("font-weight: 800; font-size: 14px; color: #ffffff;");
+    
+    QPushButton *addInstanceBtn = new QPushButton("+ Add Solo DSP Instance", m_rackGridWidget);
+    addInstanceBtn->setProperty("class", "action-btn");
+    addInstanceBtn->setCursor(Qt::PointingHandCursor);
+    addInstanceBtn->setFixedWidth(180);
+    connect(addInstanceBtn, &QPushButton::clicked, this, [=]() {
+        VdcSlot newSlot;
+        newSlot.slot_id = m_currentProfile.vdc_slots.size() + 1;
+        newSlot.channel_name = "Solo Rack";
+        newSlot.vst3_dll_path = "";
+        newSlot.active = false;
+        newSlot.input_source = "";
+        newSlot.output_destination = "";
+        m_currentProfile.vdc_slots.append(newSlot);
+        renderRackGrid();
+    });
 
-        QLabel *chHeader = new QLabel(ch, chCol);
-        chHeader->setAlignment(Qt::AlignCenter);
-        chHeader->setStyleSheet("font-weight: 800; font-size: 11px; color: #a0a5b5; letter-spacing: 1.5px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; margin-bottom: 5px;");
-        chColLayout->addWidget(chHeader);
+    headerLayout->addWidget(lblTitle);
+    headerLayout->addStretch();
+    headerLayout->addWidget(addInstanceBtn);
+    layout->addLayout(headerLayout);
 
-        for (int slotId = 1; slotId <= 3; ++slotId) {
-            // Find slot
-            VdcSlot matchingSlot;
-            bool found = false;
-            for (const VdcSlot &s : m_currentProfile.vdc_slots) {
-                if (s.channel_name == ch && s.slot_id == slotId) {
-                    matchingSlot = s;
-                    found = true;
-                    break;
-                }
-            }
+    // Column Headers
+    QHBoxLayout *colHeaders = new QHBoxLayout();
+    colHeaders->setContentsMargins(10, 5, 10, 5);
+    
+    QLabel *hActive = new QLabel("Active", m_rackGridWidget);
+    hActive->setFixedWidth(50);
+    hActive->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    
+    QLabel *hPlugin = new QLabel("VST3 Plugin", m_rackGridWidget);
+    hPlugin->setFixedWidth(200);
+    hPlugin->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    
+    QLabel *hInput = new QLabel("Input Source", m_rackGridWidget);
+    hInput->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    
+    QLabel *hOutput = new QLabel("Output Destination", m_rackGridWidget);
+    hOutput->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    
+    QLabel *hDelete = new QLabel("Action", m_rackGridWidget);
+    hDelete->setFixedWidth(50);
+    hDelete->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
 
-            QFrame *slotFrame = new QFrame(chCol);
-            QHBoxLayout *slotFrameLayout = new QHBoxLayout(slotFrame);
-            slotFrameLayout->setContentsMargins(12, 0, 12, 0);
-            slotFrameLayout->setSpacing(10);
+    colHeaders->addWidget(hActive);
+    colHeaders->addWidget(hPlugin);
+    colHeaders->addWidget(hInput);
+    colHeaders->addWidget(hOutput);
+    colHeaders->addWidget(hDelete);
+    layout->addLayout(colHeaders);
 
-            if (found) {
-                slotFrame->setProperty("class", "rack-slot");
-                
-                QLabel *numLabel = new QLabel(QString::number(slotId), slotFrame);
-                numLabel->setFixedWidth(20);
-                numLabel->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    // Scroll Area for rows
+    QScrollArea *scrollArea = new QScrollArea(m_rackGridWidget);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet("background-color: transparent;");
+    
+    QWidget *scrollContent = new QWidget(scrollArea);
+    scrollContent->setStyleSheet("background-color: transparent;");
+    QVBoxLayout *scrollLayout = new QVBoxLayout(scrollContent);
+    scrollLayout->setContentsMargins(0, 0, 0, 0);
+    scrollLayout->setSpacing(6);
 
-                QLabel *nameLabel = new QLabel(matchingSlot.vst3_dll_path, slotFrame);
-                nameLabel->setStyleSheet("font-weight: 600;");
-                nameLabel->setToolTip(QString("In: %1\nOut: %2").arg(matchingSlot.input_source).arg(matchingSlot.output_destination));
+    QList<QString> installedPlugins = scanInstalledVst3Plugins();
+    QList<QString> allPorts = queryPipeWirePorts();
 
-                QPushButton *removeBtn = new QPushButton("✖", slotFrame);
-                removeBtn->setFixedSize(20, 20);
-                removeBtn->setCursor(Qt::PointingHandCursor);
-                removeBtn->setStyleSheet("background: transparent; border: none; color: rgba(255,255,255,0.3); font-size: 10px;");
-                removeBtn->setToolTip("Remove VST3 Insert");
-                connect(removeBtn, &QPushButton::clicked, this, [=]() {
-                    handleRemoveSlotClick(ch, slotId);
-                });
+    for (int i = 0; i < m_currentProfile.vdc_slots.size(); ++i) {
+        VdcSlot &slot = m_currentProfile.vdc_slots[i];
+        
+        QFrame *rowFrame = new QFrame(scrollContent);
+        rowFrame->setStyleSheet("QFrame { background-color: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; } QFrame:hover { background-color: rgba(255,255,255,0.04); }");
+        
+        QHBoxLayout *rowLayout = new QHBoxLayout(rowFrame);
+        rowLayout->setContentsMargins(10, 6, 10, 6);
+        rowLayout->setSpacing(10);
 
-                slotFrameLayout->addWidget(numLabel);
-                slotFrameLayout->addWidget(nameLabel);
-                slotFrameLayout->addStretch();
-                slotFrameLayout->addWidget(removeBtn);
-            } else {
-                slotFrame->setProperty("class", "rack-slot rack-slot-empty");
-                
-                QLabel *numLabel = new QLabel(QString::number(slotId), slotFrame);
-                numLabel->setFixedWidth(20);
-                numLabel->setStyleSheet("font-weight: 800; color: rgba(255,255,255,0.2); font-size: 11px;");
+        // 1. Active Checkbox
+        QCheckBox *chkActive = new QCheckBox(rowFrame);
+        chkActive->setFixedWidth(50);
+        chkActive->setChecked(slot.active);
+        connect(chkActive, &QCheckBox::toggled, this, [=, &slot](bool checked) {
+            slot.active = checked;
+        });
 
-                QPushButton *addBtn = new QPushButton("+ Add VST3 Insert", slotFrame);
-                addBtn->setCursor(Qt::PointingHandCursor);
-                addBtn->setStyleSheet("background: transparent; border: none; color: #a0a5b5; font-weight: 600; text-align: left;");
-                connect(addBtn, &QPushButton::clicked, this, [=]() {
-                    handleAddSlotClick(ch, slotId);
-                });
-
-                slotFrameLayout->addWidget(numLabel);
-                slotFrameLayout->addWidget(addBtn);
-                slotFrameLayout->addStretch();
-            }
-
-            slotFrame->style()->unpolish(slotFrame);
-            slotFrame->style()->polish(slotFrame);
-            chColLayout->addWidget(slotFrame);
+        // 2. Plugin Selector
+        QComboBox *cmbPlugin = new QComboBox(rowFrame);
+        cmbPlugin->setFixedWidth(200);
+        cmbPlugin->setProperty("class", "custom-select");
+        for (const QString &plug : installedPlugins) {
+            cmbPlugin->addItem(plug, plug);
         }
-        gridOuter->addWidget(chCol);
+        if (cmbPlugin->count() == 0) {
+            cmbPlugin->addItem("CyberDenoiserPro (Mock)", "CyberDenoiserPro");
+            cmbPlugin->addItem("THE MIDS ROOM (Mock)", "THE MIDS ROOM");
+            cmbPlugin->addItem("Strobe Poly Tuner (Mock)", "Strobe Poly Tuner");
+        }
+        int plugIdx = cmbPlugin->findData(slot.vst3_dll_path);
+        if (plugIdx >= 0) {
+            cmbPlugin->setCurrentIndex(plugIdx);
+        } else if (cmbPlugin->count() > 0) {
+            slot.vst3_dll_path = cmbPlugin->currentData().toString();
+        }
+        connect(cmbPlugin, &QComboBox::currentTextChanged, this, [=, &slot](const QString &text) {
+            slot.vst3_dll_path = text;
+        });
+
+        // 3. Input Port Selector
+        QComboBox *cmbInput = new QComboBox(rowFrame);
+        cmbInput->setProperty("class", "custom-select");
+        for (const QString &port : allPorts) {
+            if (port.contains("capture") || port.contains("monitor")) {
+                QString displayName = port;
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                cmbInput->addItem(displayName, port);
+            }
+        }
+        if (cmbInput->count() == 0) {
+            cmbInput->addItem("capture_AUX0 (Fallback)", "alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0");
+        }
+        int inputIdx = cmbInput->findData(slot.input_source);
+        if (inputIdx >= 0) {
+            cmbInput->setCurrentIndex(inputIdx);
+        } else if (cmbInput->count() > 0) {
+            slot.input_source = cmbInput->currentData().toString();
+        }
+        connect(cmbInput, &QComboBox::currentIndexChanged, this, [=, &slot](int index) {
+            slot.input_source = cmbInput->itemData(index).toString();
+        });
+
+        // 4. Output Port Selector
+        QComboBox *cmbOutput = new QComboBox(rowFrame);
+        cmbOutput->setProperty("class", "custom-select");
+        for (const QString &port : allPorts) {
+            if (port.contains("playback") || port.contains("input")) {
+                QString displayName = port;
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                cmbOutput->addItem(displayName, port);
+            }
+        }
+        if (cmbOutput->count() == 0) {
+            cmbOutput->addItem("playback_AUX0 (Fallback)", "alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0");
+        }
+        int outputIdx = cmbOutput->findData(slot.output_destination);
+        if (outputIdx >= 0) {
+            cmbOutput->setCurrentIndex(outputIdx);
+        } else if (cmbOutput->count() > 0) {
+            slot.output_destination = cmbOutput->currentData().toString();
+        }
+        connect(cmbOutput, &QComboBox::currentIndexChanged, this, [=, &slot](int index) {
+            slot.output_destination = cmbOutput->itemData(index).toString();
+        });
+
+        // 5. Delete Button
+        QPushButton *btnDelete = new QPushButton("✖", rowFrame);
+        btnDelete->setFixedSize(30, 26);
+        btnDelete->setCursor(Qt::PointingHandCursor);
+        btnDelete->setStyleSheet("background: transparent; border: none; color: rgba(255,255,255,0.4); font-size: 14px;");
+        btnDelete->setToolTip("Delete Solo DSP Instance");
+        connect(btnDelete, &QPushButton::clicked, this, [=]() {
+            m_currentProfile.vdc_slots.removeAt(i);
+            renderRackGrid();
+        });
+
+        rowLayout->addWidget(chkActive);
+        rowLayout->addWidget(cmbPlugin);
+        rowLayout->addWidget(cmbInput);
+        rowLayout->addWidget(cmbOutput);
+        rowLayout->addWidget(btnDelete);
+
+        scrollLayout->addWidget(rowFrame);
     }
+    
+    scrollLayout->addStretch();
+    scrollArea->setWidget(scrollContent);
+    layout->addWidget(scrollArea);
 }
 
 void MainWindow::handleRemoveSlotClick(const QString &channelName, int slotId) {
-    m_currentProfile.vdc_slots.erase(
-        std::remove_if(m_currentProfile.vdc_slots.begin(), m_currentProfile.vdc_slots.end(),
-                       [=](const VdcSlot &s) { return s.channel_name == channelName && s.slot_id == slotId; }),
-        m_currentProfile.vdc_slots.end()
-    );
-    renderRackGrid();
+    Q_UNUSED(channelName);
+    Q_UNUSED(slotId);
 }
 
 void MainWindow::handleAddSlotClick(const QString &channelName, int slotId) {
-    QDialog dialog(this);
-    dialog.setWindowTitle("Add VST3 Insert");
-    dialog.setMinimumWidth(380);
-    QVBoxLayout *layout = new QVBoxLayout(&dialog);
-    layout->setSpacing(15);
-    layout->setContentsMargins(20, 20, 20, 20);
-
-    QLabel *header = new QLabel("Insert VST3 into slot", &dialog);
-    header->setStyleSheet("font-weight: 800; font-size: 16px;");
-    layout->addWidget(header);
-
-    // VST3 List Combo
-    QVBoxLayout *vstBox = new QVBoxLayout();
-    vstBox->setSpacing(6);
-    QLabel *vstLabel = new QLabel("VST3 Plugin:", &dialog);
-    vstLabel->setStyleSheet("color: #a0a5b5; font-size: 12px; font-weight: 600;");
-    QComboBox *vstCombo = new QComboBox(&dialog);
-    vstCombo->setProperty("class", "custom-select");
-    
-    QList<QString> installed = scanInstalledVst3Plugins();
-    for (const QString &plugin : installed) {
-        vstCombo->addItem(plugin, plugin);
-    }
-    if (vstCombo->count() == 0) {
-        vstCombo->addItem("CyberDenoiserPro (Mock/Fallback)", "CyberDenoiserPro");
-        vstCombo->addItem("THE MIDS ROOM (Mock/Fallback)", "THE MIDS ROOM");
-        vstCombo->addItem("Strobe Poly Tuner (Mock/Fallback)", "Strobe Poly Tuner");
-    }
-    vstBox->addWidget(vstLabel);
-    vstBox->addWidget(vstCombo);
-    layout->addLayout(vstBox);
-
-    // Ports
-    QList<QString> ports = queryPipeWirePorts();
-    QList<QString> inputPorts;
-    QList<QString> outputPorts;
-    for (const QString &port : ports) {
-        if (port.toLower().contains("capture") || port.toLower().contains("output")) {
-            inputPorts.append(port);
-        }
-        if (port.toLower().contains("playback") || port.toLower().contains("input")) {
-            outputPorts.append(port);
-        }
-    }
-    if (inputPorts.isEmpty()) inputPorts = ports;
-    if (outputPorts.isEmpty()) outputPorts = ports;
-
-    QVBoxLayout *inBox = new QVBoxLayout();
-    inBox->setSpacing(6);
-    QLabel *inLabel = new QLabel("Input Source (PipeWire Port):", &dialog);
-    inLabel->setStyleSheet("color: #a0a5b5; font-size: 12px; font-weight: 600;");
-    QComboBox *inCombo = new QComboBox(&dialog);
-    inCombo->setProperty("class", "custom-select");
-    for (const QString &port : inputPorts) {
-        inCombo->addItem(port.split(":").last(), port);
-    }
-    inBox->addWidget(inLabel);
-    inBox->addWidget(inCombo);
-    layout->addLayout(inBox);
-
-    QVBoxLayout *outBox = new QVBoxLayout();
-    outBox->setSpacing(6);
-    QLabel *outLabel = new QLabel("Output Destination (PipeWire Port):", &dialog);
-    outLabel->setStyleSheet("color: #a0a5b5; font-size: 12px; font-weight: 600;");
-    QComboBox *outCombo = new QComboBox(&dialog);
-    outCombo->setProperty("class", "custom-select");
-    for (const QString &port : outputPorts) {
-        outCombo->addItem(port.split(":").last(), port);
-    }
-    outBox->addWidget(outLabel);
-    outBox->addWidget(outCombo);
-    layout->addLayout(outBox);
-
-    QHBoxLayout *btns = new QHBoxLayout();
-    QPushButton *addBtn = new QPushButton("Add Insert", &dialog);
-    addBtn->setProperty("class", "action-btn");
-    QPushButton *cancelBtn = new QPushButton("Cancel", &dialog);
-    cancelBtn->setProperty("class", "settings-btn");
-    btns->addWidget(cancelBtn);
-    btns->addWidget(addBtn);
-    layout->addLayout(btns);
-
-    connect(addBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
-    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
-
-    if (dialog.exec() == QDialog::Accepted) {
-        QString vstName = vstCombo->currentData().toString();
-        QString inPort = inCombo->currentData().toString();
-        QString outPort = outCombo->currentData().toString();
-
-        m_currentProfile.vdc_slots.append({slotId, channelName, vstName, true, inPort, outPort});
-        renderRackGrid();
-    }
+    Q_UNUSED(channelName);
+    Q_UNUSED(slotId);
 }
 
 // =============================================================================
@@ -1962,7 +1970,9 @@ void MainWindow::startInstaller(const QString &filePath) {
         QDir().mkpath(configDir);
         
         // Replicate bridge script to host
+        QFile::remove(configDir + "/arthur-installer-bridge.sh");
         QFile::copy("/app/bin/arthur-installer-bridge.sh", configDir + "/arthur-installer-bridge.sh");
+        QFile::remove(configDir + "/arthur_bridge.so");
         QFile::copy("/app/lib/arthur_bridge.so", configDir + "/arthur_bridge.so");
 
         m_installerProcess->start("flatpak-spawn", QStringList() << "--host" << "bash" << (configDir + "/arthur-installer-bridge.sh") << filePath);
@@ -2040,6 +2050,7 @@ void MainWindow::runSystemTuning() {
     if (flatpakMode) {
         QString configDir = QDir::homePath() + "/.config/arthur";
         QDir().mkpath(configDir);
+        QFile::remove(configDir + "/vdc_tune.sh");
         QFile::copy("/app/bin/vdc_tune.sh", configDir + "/vdc_tune.sh");
         
         m_tuningProcess->start("flatpak-spawn", QStringList() << "--host" << "pkexec" << "bash" << (configDir + "/vdc_tune.sh") << "--cores" << targetCores);
