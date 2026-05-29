@@ -14,7 +14,8 @@
     "--filesystem=host",
     "--share=ipc",
     "--share=network",
-    "--talk-name=org.freedesktop.Flatpak"
+    "--talk-name=org.freedesktop.Flatpak",
+    "--env=WEBKIT_DISABLE_DMABUF_RENDERER=1"
   ],
   "modules": [
     {
