@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Arthur Control Center
+Comment=Arthur VST3 Translation Layer Control Center
+Icon=org.arthur.TranslationLayer
+Exec=arthur-control-center
+Categories=AudioVideo;Audio;
+Terminal=false
