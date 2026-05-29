@@ -24,8 +24,8 @@
                 <button class="nav-btn" data-tab="settings">Audio Setup</button>
             </nav>
             <div class="status-indicator">
-                <span class="pulse-dot green"></span>
-                <span>System phase-locked</span>
+                <span class="pulse-dot green" id="global-status-dot"></span>
+                <span id="global-status-text">System phase-locked</span>
             </div>
         </aside>
 
@@ -42,18 +42,18 @@
                     <!-- Virtual DSP Card -->
                     <div class="card dsp-card">
                         <h3>Virtual DSP Cores (VDC)</h3>
-                        <div class="status-badge active">Active</div>
+                        <div class="status-badge active" id="dsp-active-badge">Active</div>
                         <div class="core-info">
                             <span class="label">Dedicated Cores:</span>
-                            <span class="value">4-7 (Intel Core i7)</span>
+                            <span class="value" id="dsp-cores-value">4-7</span>
                         </div>
                         <div class="meter-container">
                             <div class="meter-label">
                                 <span>DSP Load</span>
-                                <span>64.2%</span>
+                                <span id="dsp-load-text">64.2%</span>
                             </div>
                             <div class="meter-bar">
-                                <div class="meter-fill" style="width: 64.2%"></div>
+                                <div class="meter-fill" id="dsp-load-fill" style="width: 64.2%"></div>
                             </div>
                         </div>
                     </div>
@@ -61,18 +61,18 @@
                     <!-- CLLS Card -->
                     <div class="card clls-card">
                         <h3>Closed-Loop Latency Sync</h3>
-                        <div class="status-badge locked">Locked</div>
+                        <div class="status-badge locked" id="clls-status-badge">Locked</div>
                         <div class="stat-row">
                             <span class="label">Hardware RTT:</span>
-                            <span class="value">5.048 ms (242.3 samples)</span>
+                            <span class="value" id="clls-rtt-value">5.048 ms</span>
                         </div>
                         <div class="stat-row">
                             <span class="label">CLLS Correction:</span>
-                            <span class="value">+0.285 ms (+13.6 samples)</span>
+                            <span class="value" id="clls-correction-value">+0.285 ms</span>
                         </div>
                         <div class="stat-row">
                             <span class="label">Phase Jitter:</span>
-                            <span class="value">±416 ns (±0.02 samples)</span>
+                            <span class="value" id="clls-jitter-value">±416 ns</span>
                         </div>
                     </div>
                 </div>
@@ -81,8 +81,8 @@
                 <div class="card wide-card">
                     <h3>ALSA MIDI Clock Alignment</h3>
                     <div class="midi-status">
-                        <span class="status-text">Slaved to PCM hardware clock (hw:0,0)</span>
-                        <span class="jitter-value">Jitter: &lt; 10 &mu;s</span>
+                        <span class="status-text" id="midi-status-text">Slaved to PCM hardware clock (hw:0,0)</span>
+                        <span class="jitter-value" id="midi-jitter-value">Jitter: &lt; 10 &mu;s</span>
                     </div>
                     <div class="latency-graph">
                         <div class="bar" style="height: 40%"></div>
@@ -164,59 +164,8 @@ Executing installer binary inside virtualization layer...</pre>
                     <button class="action-btn" id="save-profile-btn">Save Rack Configuration</button>
                 </div>
 
-                <div class="rack-grid">
-                    <!-- Channel 1 -->
-                    <div class="rack-channel">
-                        <div class="channel-header">CH 1 INSERTS</div>
-                        <div class="rack-slot filled">
-                            <span class="slot-number">1</span>
-                            <span class="slot-plugin">FabFilter Pro-Q 3</span>
-                            <span class="slot-action">✖</span>
-                        </div>
-                        <div class="rack-slot filled">
-                            <span class="slot-number">2</span>
-                            <span class="slot-plugin">Universal Audio 1176LN</span>
-                            <span class="slot-action">✖</span>
-                        </div>
-                        <div class="rack-slot empty">
-                            <span class="slot-number">3</span>
-                            <span class="slot-placeholder">+ Add VST3 Insert</span>
-                        </div>
-                    </div>
-                    <!-- Channel 2 -->
-                    <div class="rack-channel">
-                        <div class="channel-header">CH 2 INSERTS</div>
-                        <div class="rack-slot filled">
-                            <span class="slot-number">1</span>
-                            <span class="slot-plugin">SSL Channel Strip</span>
-                            <span class="slot-action">✖</span>
-                        </div>
-                        <div class="rack-slot empty">
-                            <span class="slot-number">2</span>
-                            <span class="slot-placeholder">+ Add VST3 Insert</span>
-                        </div>
-                        <div class="rack-slot empty">
-                            <span class="slot-number">3</span>
-                            <span class="slot-placeholder">+ Add VST3 Insert</span>
-                        </div>
-                    </div>
-                    <!-- Channel 3 -->
-                    <div class="rack-channel">
-                        <div class="channel-header">CH 3 INSERTS</div>
-                        <div class="rack-slot filled">
-                            <span class="slot-number">1</span>
-                            <span class="slot-plugin">Teletronix LA-2A</span>
-                            <span class="slot-action">✖</span>
-                        </div>
-                        <div class="rack-slot empty">
-                            <span class="slot-number">2</span>
-                            <span class="slot-placeholder">+ Add VST3 Insert</span>
-                        </div>
-                        <div class="rack-slot empty">
-                            <span class="slot-number">3</span>
-                            <span class="slot-placeholder">+ Add VST3 Insert</span>
-                        </div>
-                    </div>
+                <div class="rack-grid" id="rack-grid">
+                    <!-- Dynamic virtual DSP channels and slots go here -->
                 </div>
             </section>
 
@@ -232,26 +181,26 @@ Executing installer binary inside virtualization layer...</pre>
                         <h3>PipeWire Settings</h3>
                         <div class="setting-item">
                             <label>Audio Interface</label>
-                            <select class="custom-select">
-                                <option>Focusrite Scarlett 18i20 (USB Audio)</option>
-                                <option>Universal Audio Volt 4 (USB Audio)</option>
-                                <option>Intel HD Audio (Internal)</option>
+                            <select class="custom-select" id="audio-interface-select">
+                                <!-- Populated dynamically -->
                             </select>
                         </div>
                         <div class="setting-item">
                             <label>Sample Rate</label>
-                            <select class="custom-select">
-                                <option>48,000 Hz</option>
-                                <option>44,100 Hz</option>
-                                <option>96,000 Hz</option>
+                            <select class="custom-select" id="sample-rate-select">
+                                <option value="44100">44,100 Hz</option>
+                                <option value="48000">48,000 Hz</option>
+                                <option value="96000">96,000 Hz</option>
                             </select>
                         </div>
                         <div class="setting-item">
                             <label>Buffer Size (Quantum)</label>
-                            <select class="custom-select">
-                                <option>128 samples (2.7 ms)</option>
-                                <option>64 samples (1.3 ms)</option>
-                                <option>256 samples (5.3 ms)</option>
+                            <select class="custom-select" id="buffer-size-select">
+                                <option value="64">64 samples (1.3 ms)</option>
+                                <option value="128">128 samples (2.7 ms)</option>
+                                <option value="256">256 samples (5.3 ms)</option>
+                                <option value="512">512 samples (10.7 ms)</option>
+                                <option value="1024">1024 samples (21.3 ms)</option>
                             </select>
                         </div>
                     </div>
@@ -260,10 +209,10 @@ Executing installer binary inside virtualization layer...</pre>
                         <h3>CLLS & MIDI Timings</h3>
                         <div class="setting-item">
                             <label>CLLS Calibration Channel</label>
-                            <select class="custom-select">
-                                <option>Channel 8 (Loopback Return)</option>
-                                <option>Channel 2 (Stereo Out L)</option>
-                                <option>Channel 4 (Stereo Out R)</option>
+                            <select class="custom-select" id="clls-channel-select">
+                                <option value="Channel 8">Channel 8 (Loopback Return)</option>
+                                <option value="Channel 2">Channel 2 (Stereo Out L)</option>
+                                <option value="Channel 4">Channel 4 (Stereo Out R)</option>
                             </select>
                         </div>
                         <div class="setting-item checkbox-item">
@@ -320,6 +269,37 @@ Executing installer binary inside virtualization layer...</pre>
             </section>
         </main>
     </div>
+
+    <!-- Add VST3 Modal -->
+    <div id="add-vst-modal" class="modal hidden">
+        <div class="modal-content">
+            <header style="margin-bottom: 10px;">
+                <h2>Add VST3 Insert</h2>
+                <p>Insert a VST3 plugin into the Virtual DSP Core slot.</p>
+            </header>
+            <div class="setting-item">
+                <label for="modal-vst-path">VST3 Plugin Name / DLL Path</label>
+                <input type="text" id="modal-vst-path" class="custom-input" placeholder="e.g. FabFilter Pro-Q 3">
+            </div>
+            <div class="setting-item">
+                <label for="modal-input-source">Input Source (PipeWire Port)</label>
+                <select id="modal-input-source" class="custom-select" style="width: 100%;">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="setting-item">
+                <label for="modal-output-dest">Output Destination (PipeWire Port)</label>
+                <select id="modal-output-dest" class="custom-select" style="width: 100%;">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="settings-btn" id="modal-cancel-btn">Cancel</button>
+                <button class="action-btn" id="modal-confirm-btn">Add Insert</button>
+            </div>
+        </div>
+    </div>
+
     <script src="main.js"></script>
 </body>
 </html>
