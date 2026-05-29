@@ -61,7 +61,7 @@ install(PROGRAMS
 # Install desktop entry and icons for Flatpak system integration
 install(FILES org.arthur.TranslationLayer.desktop DESTINATION share/applications)
 install(FILES arthur.png DESTINATION share/pixmaps RENAME org.arthur.TranslationLayer.png)
-install(FILES arthur.png DESTINATION share/icons/hicolor/1024x1024/apps RENAME org.arthur.TranslationLayer.png)
+install(FILES arthur.png DESTINATION share/icons/hicolor/512x512/apps RENAME org.arthur.TranslationLayer.png)
 
 # Install pre-built Tauri frontend binary if it exists
 if(EXISTS "${CMAKE_SOURCE_DIR}/bin/arthur-control-center")
