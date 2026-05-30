@@ -1,103 +1,98 @@
-name: Build & Release AppImage
+name: CI Build
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-    - name: Install Build Dependencies
+    # -------------------------------------------------------------------------
+    # System Dependencies
+    # -------------------------------------------------------------------------
+    - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk libasound2-dev libpipewire-0.3-dev libspa-0.2-dev libwine-dev wine
+        sudo apt-get update -qq
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libwayland-dev \
+          wayland-protocols \
+          libasound2-dev \
+          libpipewire-0.3-dev \
+          libspa-0.2-dev \
+          python3 \
+          wget \
+          file
 
-    - name: Download VST3 Headers
+    # -------------------------------------------------------------------------
+    # VST3 Headers (required by main.cpp / arthur_bridge)
+    # -------------------------------------------------------------------------
+    - name: Clone VST3 plugin interfaces
       run: |
         mkdir -p vst3_headers
-        git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git vst3_headers/pluginterfaces
-        git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git vst3_headers/base
+        git clone --depth 1 \
+          https://github.com/steinbergmedia/vst3_pluginterfaces.git \
+          vst3_headers/pluginterfaces
+        git clone --depth 1 \
+          https://github.com/steinbergmedia/vst3_base.git \
+          vst3_headers/base
 
-    - name: Configure & Build Bridge (Linux side)
+    # -------------------------------------------------------------------------
+    # Build Linux-native targets (no Qt GUI in CI — too heavy)
+    # -------------------------------------------------------------------------
+    - name: Configure CMake
       run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=OFF
-        cmake --build build --config Release -j$(nproc)
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_GUI=OFF
 
-    - name: Build Wine Guest and Agent Binaries
-      run: |
-        wineg++ -O2 -I. archive/guest_legacy.cpp -o build/arthur-guest.exe -lpthread
-        wineg++ -O2 -I. -Ivst3_headers win_guest_agent.cpp vstiids.cpp -o build/win_guest_agent.exe -lpthread
-        mkdir -p bin
-        cp build/arthur-guest.exe bin/
-        cp build/win_guest_agent.exe bin/
+    - name: Build all native targets
+      run: cmake --build build --config Release -j$(nproc)
 
-    - name: Run Arthur Closed-Loop Stress Test
+    # -------------------------------------------------------------------------
+    # Run the stress test to validate lock-free IPC
+    # -------------------------------------------------------------------------
+    - name: Run Arthur IPC stress test
       run: |
-        rm -f /tmp/arthur.sock
+        # Create XDG_RUNTIME_DIR so arthur-daemon uses a predictable socket path
+        export XDG_RUNTIME_DIR=$(mktemp -d)
+        chmod 700 "$XDG_RUNTIME_DIR"
+
         ./build/arthur-daemon &
+        DAEMON_PID=$!
         sleep 2
+
         ./build/arthur_stress_test
-        killall -9 arthur-daemon wine wineserver || true
+        TEST_EXIT=$?
 
-    - name: Setup AppDir (Standalone Arthur)
-      run: |
-        mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/lib/arthur
-        
-        # Copy ONLY the Arthur Linux components
-        cp build/arthur_bridge.so AppDir/usr/lib/arthur/
-        cp arthur-cli.py AppDir/usr/bin/
-        cp arthur.png AppDir/
-        cp AppRun AppDir/
-        
-        # ENSURE DESKTOP FILE IS IN ROOT OF APPDIR
-        # Use existing arthur.desktop or create it
-        if [ -f "arthur.desktop" ]; then
-          cp arthur.desktop AppDir/
-        else
-          echo "[Desktop Entry]" > AppDir/arthur.desktop
-          echo "Type=Application" >> AppDir/arthur.desktop
-          echo "Name=Arthur" >> AppDir/arthur.desktop
-          echo "Icon=arthur" >> AppDir/arthur.desktop
-          echo "Exec=arthur-cli.py" >> AppDir/arthur.desktop
-          echo "Categories=Audio;" >> AppDir/arthur.desktop
-        fi
-        
-        # If we have build_artifacts in the repo, copy them as fallback
-        if [ -d "build_artifacts" ]; then
-          mkdir -p AppDir/usr/lib/arthur/fallback
-          cp build_artifacts/* AppDir/usr/lib/arthur/fallback/ || true
-        fi
+        kill $DAEMON_PID 2>/dev/null || true
+        wait $DAEMON_PID 2>/dev/null || true
+        exit $TEST_EXIT
 
-    - name: Download AppImageTool
-      run: |
-        wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-        chmod +x appimagetool-x86_64.AppImage
-
-    - name: Build AppImage
-      run: |
-        export ARCH=x86_64
-        VERSION=${{ github.ref_name }}
-        [ "$VERSION" = "main" ] && VERSION="v2.2.0-beta"
-        ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir Arthur-${VERSION}-x86_64.AppImage
-
-    - name: Upload Artifact
+    # -------------------------------------------------------------------------
+    # Upload native binaries as CI artifact
+    # -------------------------------------------------------------------------
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: Arthur-AppImage
-        path: Arthur-*-x86_64.AppImage
-
-    - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: Arthur-*-x86_64.AppImage
-        generate_release_notes: true
+        name: arthur-native-binaries
+        path: |
+          build/arthur_bridge.so
+          build/arthur-daemon
+          build/pw_module_clls
+          build/midi_sync
+          build/arthur_stress_test
+        if-no-files-found: error
+        retention-days: 7

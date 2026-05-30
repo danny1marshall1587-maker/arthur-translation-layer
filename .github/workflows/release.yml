@@ -1,91 +1,193 @@
-name: Build and Release Arthur Translation Layer
+name: Release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v4.0.0)'
+        required: true
 
 jobs:
-  release:
-    name: Build & Publish Release Assets
-    runs-on: ubuntu-22.04
+  build-and-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Install System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev \
-            libpipewire-0.3-dev \
-            libspa-0.2-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libwine-dev \
-            wine
+    # -------------------------------------------------------------------------
+    # System Dependencies
+    # -------------------------------------------------------------------------
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libwayland-dev \
+          wayland-protocols \
+          libasound2-dev \
+          libpipewire-0.3-dev \
+          libspa-0.2-dev \
+          python3 \
+          wget \
+          file \
+          fuse \
+          libfuse2
 
-      - name: Install flatpak and flatpak-builder
-        run: |
-          sudo apt-get install -y flatpak flatpak-builder
+    # -------------------------------------------------------------------------
+    # VST3 Headers
+    # -------------------------------------------------------------------------
+    - name: Clone VST3 plugin interfaces
+      run: |
+        mkdir -p vst3_headers
+        git clone --depth 1 \
+          https://github.com/steinbergmedia/vst3_pluginterfaces.git \
+          vst3_headers/pluginterfaces
+        git clone --depth 1 \
+          https://github.com/steinbergmedia/vst3_base.git \
+          vst3_headers/base
 
-      - name: Download VST3 Headers
-        run: |
-          mkdir -p vst3_headers
-          git clone --depth 1 https://github.com/steinbergmedia/vst3_pluginterfaces.git vst3_headers/pluginterfaces
-          git clone --depth 1 https://github.com/steinbergmedia/vst3_base.git vst3_headers/base
+    # -------------------------------------------------------------------------
+    # Build all native Linux targets
+    # -------------------------------------------------------------------------
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_GUI=OFF
 
-      - name: Build C++ Host Bridge & Daemons
-        run: |
-          mkdir -p build
-          cd build
-          cmake -DBUILD_GUI=OFF ..
-          make -j$(nproc)
+    - name: Build all native targets
+      run: cmake --build build --config Release -j$(nproc)
 
-      - name: Build Wine Guest and Agent Binaries
-        run: |
-          wineg++ -O2 -I. archive/guest_legacy.cpp -o build/arthur-guest.exe -lpthread
-          wineg++ -O2 -I. -Ivst3_headers win_guest_agent.cpp vstiids.cpp -o build/win_guest_agent.exe -lpthread
-          mkdir -p bin
-          cp build/arthur-guest.exe bin/
-          cp build/arthur-guest.exe.so bin/
-          cp build/win_guest_agent.exe bin/
-          cp build/win_guest_agent.exe.so bin/
+    # -------------------------------------------------------------------------
+    # Run the stress test
+    # -------------------------------------------------------------------------
+    - name: Run Arthur IPC stress test
+      run: |
+        export XDG_RUNTIME_DIR=$(mktemp -d)
+        chmod 700 "$XDG_RUNTIME_DIR"
 
-      - name: Run Arthur Closed-Loop Stress Test
-        run: |
-          rm -f /tmp/arthur.sock
-          ./build/arthur-daemon &
-          sleep 2
-          ./build/arthur_stress_test
-          killall -9 arthur-daemon wine wineserver || true
+        ./build/arthur-daemon &
+        DAEMON_PID=$!
+        sleep 2
 
-      - name: Package Flatpak Bundle
-        run: |
-          # Clean CMake cache to prevent directory mismatch errors inside Flatpak sandbox
-          rm -rf build/CMakeCache.txt build/CMakeFiles
-          # Build the Flatpak app using our manifest and export to a local repo directory
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak-builder --force-clean --repo=repo --user --install-deps-from=flathub build-dir org.arthur.TranslationLayer.json
-          flatpak build-bundle repo arthur-translation-layer.flatpak org.arthur.TranslationLayer
+        ./build/arthur_stress_test
+        TEST_EXIT=$?
 
-      - name: Upload Binaries to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            arthur-translation-layer.flatpak
-            build/pw_module_clls
-            build/midi_sync
-            build/arthur_bridge.so
-            build/arthur-daemon
-            build/win_guest_agent.exe
-            build/win_guest_agent.exe.so
-            build/arthur-guest.exe
-            build/arthur-guest.exe.so
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        kill $DAEMON_PID 2>/dev/null || true
+        wait $DAEMON_PID 2>/dev/null || true
+        exit $TEST_EXIT
+
+    # -------------------------------------------------------------------------
+    # Determine release version tag
+    # -------------------------------------------------------------------------
+    - name: Set release version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        fi
+
+    # -------------------------------------------------------------------------
+    # Package AppImage (Linux-native binaries + CLI)
+    # -------------------------------------------------------------------------
+    - name: Download appimagetool
+      run: |
+        wget -q \
+          https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
+          -O appimagetool.AppImage
+        chmod +x appimagetool.AppImage
+
+    - name: Assemble AppDir
+      run: |
+        mkdir -p AppDir/usr/bin
+        mkdir -p AppDir/usr/lib/arthur
+
+        # Copy native binaries
+        cp build/arthur_bridge.so     AppDir/usr/lib/arthur/
+        cp build/arthur-daemon        AppDir/usr/bin/
+        cp build/pw_module_clls       AppDir/usr/bin/
+        cp build/midi_sync            AppDir/usr/bin/
+
+        # Copy scripts and CLI
+        cp arthur-cli.py              AppDir/usr/bin/arthur-cli
+        chmod +x                      AppDir/usr/bin/arthur-cli
+        cp vdc_tune.sh                AppDir/usr/bin/
+        cp arthur-installer-bridge.sh AppDir/usr/bin/
+        cp arthur_tune_cachyos.sh     AppDir/usr/bin/
+        chmod +x AppDir/usr/bin/*.sh
+
+        # Pre-built Wine guest binaries (committed to repo under bin/)
+        if [ -d bin ]; then
+          for f in bin/*.exe bin/*.exe.so; do
+            [ -f "$f" ] && cp "$f" AppDir/usr/bin/ || true
+          done
+        fi
+
+        # Icon and desktop entry
+        cp arthur.png AppDir/arthur.png
+        cp AppRun     AppDir/AppRun
+        chmod +x      AppDir/AppRun
+
+        if [ -f arthur.desktop ]; then
+          cp arthur.desktop AppDir/arthur.desktop
+        else
+          cat > AppDir/arthur.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Arthur Translation Layer
+Icon=arthur
+Exec=arthur-cli
+Categories=Audio;AudioVideo;
+EOF
+        fi
+
+    - name: Build AppImage
+      env:
+        ARCH: x86_64
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        ./appimagetool.AppImage --appimage-extract-and-run \
+          AppDir \
+          "Arthur-${VERSION}-x86_64.AppImage"
+
+    # -------------------------------------------------------------------------
+    # Bundle a tarball of all native build artefacts
+    # -------------------------------------------------------------------------
+    - name: Create native binaries tarball
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        mkdir -p dist
+        cp build/arthur_bridge.so  dist/
+        cp build/arthur-daemon     dist/
+        cp build/pw_module_clls    dist/
+        cp build/midi_sync         dist/
+        cp vdc_tune.sh             dist/
+        cp arthur_tune_cachyos.sh  dist/
+        cp arthur-installer-bridge.sh dist/
+        # Pre-built Wine guests
+        [ -d bin ] && cp bin/*.exe bin/*.exe.so dist/ 2>/dev/null || true
+        tar -czf "arthur-native-${VERSION}-linux-x86_64.tar.gz" -C dist .
+
+    # -------------------------------------------------------------------------
+    # Create GitHub Release and upload all assets
+    # -------------------------------------------------------------------------
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: "Arthur Translation Layer ${{ steps.version.outputs.VERSION }}"
+        generate_release_notes: true
+        files: |
+          Arthur-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
+          arthur-native-${{ steps.version.outputs.VERSION }}-linux-x86_64.tar.gz
