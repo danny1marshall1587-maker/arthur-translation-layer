@@ -55,6 +55,24 @@ For power users who prefer the terminal:
 
 ---
 
+## Watchdog IPC Handshake & Safe Fault Handling (v3.5.0)
+
+To eliminate GUI freezes and resolve real-time shared-memory (SHM) handshake deadlocks:
+- **Asynchronous Non-Blocking Port Registration:** Port registration and routing actions are executed on dedicated background threads. The main audio thread and the Qt Control Center GUI never block on PipeWire or JACK graph synchronization.
+- **Volatile Protection & Atomic Fences:** Control indices and transport state variables inside `AudioIPC.h` are qualified as `volatile` with explicit sequentially-consistent memory fences (`std::memory_order_seq_cst`) to prevent compiler register caching and guarantee memory visibility across the Wine process boundary.
+- **Handshake Watchdog Timer:** A 5000ms atomic watchdog timer guards the connection. If the Wine guest process fails to map the shared memory and signal `STATE_IDLE` within 5 seconds, the daemon terminates the child process and returns a clean `ERROR: Shared Memory IPC Connection Timeout` instead of spinning infinitely or freezing the DAW/GUI.
+- **Cross-Boundary SHM Namespaces:** Standardized naming maps `/dev/shm/ArthurAudioIPC` on the Linux host directly to the global Windows object `"Global\\ArthurAudioIPC"` inside the Wine-GE namespace (bridged via `Z:\dev\shm\ArthurAudioIPC`).
+
+### Running the Handshake Test Suite
+
+To verify the timed watchdog and handshake behaviors locally:
+```bash
+python3 scratch/test_handshake.py
+```
+This runs automated scenarios checking both the 5-second graceful timeout on missing/delayed guests and successful connection handshakes under Wine.
+
+---
+
 ## Architecture
 
 ```
