@@ -74,8 +74,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_statusTimer, &QTimer::timeout, this, &MainWindow::querySystemStatus);
     m_statusTimer->start(2000);
 
+    // Initialize level meter update timer (10ms to 100ms interval)
+    m_meterTimer = new QTimer(this);
+    connect(m_meterTimer, &QTimer::timeout, this, &MainWindow::updateMeterAnimations);
+    m_meterTimer->start(100);
+
     // Initial config query
     QTimer::singleShot(200, this, &MainWindow::loadAudioConfig);
+    // Initial console scan and setup
+    QTimer::singleShot(500, this, &MainWindow::rebuildConsoleChannels);
 }
 
 MainWindow::~MainWindow() {
@@ -252,6 +259,83 @@ void MainWindow::setupGlobalStylesheet() {
             border: 2px dashed rgba(255, 255, 255, 0.15);
             background-color: rgba(255, 255, 255, 0.01);
             border-radius: 16px;
+        }
+        /* Console Strip Layout & Faders/Meters */
+        .console-strip {
+            background-color: rgba(20, 24, 38, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            min-width: 120px;
+            max-width: 120px;
+        }
+        .console-strip:hover {
+            border-color: rgba(0, 122, 255, 0.4);
+            background-color: rgba(24, 28, 46, 0.7);
+        }
+        .console-strip-master {
+            background-color: rgba(28, 20, 38, 0.65);
+            border: 1px solid rgba(175, 82, 222, 0.3);
+            border-radius: 12px;
+            min-width: 120px;
+            max-width: 120px;
+        }
+        .console-strip-master:hover {
+            border-color: rgba(175, 82, 222, 0.7);
+            background-color: rgba(34, 24, 46, 0.85);
+        }
+        .btn-mute {
+            background-color: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #a0a5b5;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 11px;
+            padding: 5px;
+        }
+        .btn-mute:checked {
+            background-color: rgba(255, 59, 48, 0.25);
+            border-color: #ff3b30;
+            color: #ff453a;
+        }
+        .btn-solo {
+            background-color: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #a0a5b5;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 11px;
+            padding: 5px;
+        }
+        .btn-solo:checked {
+            background-color: rgba(255, 214, 10, 0.25);
+            border-color: #ffd60a;
+            color: #ffdb0a;
+        }
+        QSlider::groove:vertical {
+            background: rgba(255, 255, 255, 0.08);
+            width: 4px;
+            border-radius: 2px;
+        }
+        QSlider::handle:vertical {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #007aff, stop:1 #af52de);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            height: 16px;
+            width: 16px;
+            margin: 0 -6px;
+            border-radius: 8px;
+        }
+        QSlider::handle:vertical:hover {
+            background: #ffffff;
+            border-color: #007aff;
+        }
+        QProgressBar:vertical {
+            background: rgba(255, 255, 255, 0.05);
+            width: 6px;
+            border-radius: 3px;
+        }
+        QProgressBar::chunk:vertical {
+            background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #30d158, stop:0.75 #ffd60a, stop:0.95 #ff3b30);
+            border-radius: 3px;
         }
     )";
     setStyleSheet(style);
@@ -690,6 +774,8 @@ void MainWindow::initUi() {
     m_sampleRateSelect->addItem("48,000 Hz", 48000);
     m_sampleRateSelect->addItem("96,000 Hz", 96000);
 
+    m_bufferSizeSelect->addItem("16 samples (0.3 ms)", 16);
+    m_bufferSizeSelect->addItem("32 samples (0.7 ms)", 32);
     m_bufferSizeSelect->addItem("64 samples (1.3 ms)", 64);
     m_bufferSizeSelect->addItem("128 samples (2.7 ms)", 128);
     m_bufferSizeSelect->addItem("256 samples (5.3 ms)", 256);
@@ -978,6 +1064,11 @@ void MainWindow::initUi() {
     scanHeaderLayout->addWidget(m_consoleScanBtn);
     consLayout->addWidget(scanHeader);
 
+    // Horizontal layout for mixer (channels on left, busses on right)
+    QHBoxLayout *mixerLayout = new QHBoxLayout();
+    mixerLayout->setSpacing(10);
+    mixerLayout->setContentsMargins(0, 0, 0, 0);
+
     // Scrollable channel container
     QScrollArea *consScrollArea = new QScrollArea(m_consoleTab);
     consScrollArea->setWidgetResizable(true);
@@ -985,9 +1076,22 @@ void MainWindow::initUi() {
     consScrollArea->setStyleSheet("background-color: transparent;");
     m_consoleChannelContainer = new QWidget();
     m_consoleChannelContainer->setStyleSheet("background-color: transparent;");
-    new QVBoxLayout(m_consoleChannelContainer);
+    QHBoxLayout *channelsLayout = new QHBoxLayout(m_consoleChannelContainer);
+    channelsLayout->setContentsMargins(0, 0, 0, 0);
+    channelsLayout->setSpacing(8);
     consScrollArea->setWidget(m_consoleChannelContainer);
-    consLayout->addWidget(consScrollArea, 1);
+    mixerLayout->addWidget(consScrollArea, 1);
+
+    // Static Busses container on the right (anchored)
+    m_consoleBussesContainer = new QWidget(m_consoleTab);
+    m_consoleBussesContainer->setFixedWidth(380);
+    m_consoleBussesContainer->setStyleSheet("background-color: transparent;");
+    QHBoxLayout *bussesLayout = new QHBoxLayout(m_consoleBussesContainer);
+    bussesLayout->setContentsMargins(0, 0, 0, 0);
+    bussesLayout->setSpacing(8);
+    mixerLayout->addWidget(m_consoleBussesContainer);
+
+    consLayout->addLayout(mixerLayout, 1);
 
     m_contentArea->addWidget(m_consoleTab);
 }
@@ -1012,13 +1116,26 @@ void MainWindow::showConsole() {
 // =============================================================================
 void MainWindow::rebuildConsoleChannels() {
     m_consoleRows.clear();
+    m_consoleBusses.clear();
 
-    // Delete all old children in the container layout
-    QLayout *existingLayout = m_consoleChannelContainer->layout();
-    QLayoutItem *item;
-    while ((item = existingLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) item->widget()->deleteLater();
-        delete item;
+    // 1. Delete all old children in the channel container layout
+    QLayout *chanLayout = m_consoleChannelContainer->layout();
+    if (chanLayout) {
+        QLayoutItem *item;
+        while ((item = chanLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+    }
+
+    // 2. Delete all old children in the busses container layout
+    QLayout *busLayout = m_consoleBussesContainer->layout();
+    if (busLayout) {
+        QLayoutItem *item;
+        while ((item = busLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
     }
 
     // Discover active SHM slots via arthur-daemon
@@ -1051,73 +1168,200 @@ void MainWindow::rebuildConsoleChannels() {
         }
     }
 
-    QVBoxLayout *cl = qobject_cast<QVBoxLayout*>(m_consoleChannelContainer->layout());
+    QHBoxLayout *cl = qobject_cast<QHBoxLayout*>(m_consoleChannelContainer->layout());
 
     if (shmNames.isEmpty()) {
-        QLabel *emptyLabel = new QLabel("No active Arthur channel slots found.\nLoad a plugin in the DSP Rack or connect your DAW.", m_consoleChannelContainer);
+        QLabel *emptyLabel = new QLabel("No active Arthur channels.\nLoad plugins or DAW.", m_consoleChannelContainer);
         emptyLabel->setAlignment(Qt::AlignCenter);
-        emptyLabel->setStyleSheet("color: #a0a5b5; font-size: 13px; margin: 40px;");
-        cl->addWidget(emptyLabel);
-        cl->addStretch();
-        return;
+        emptyLabel->setStyleSheet("color: #a0a5b5; font-size: 12px; margin: 40px;");
+        if (cl) cl->addWidget(emptyLabel);
+    } else {
+        int rowIdx = 0;
+        for (const QString &shmName : shmNames) {
+            ConsoleChannelRow row;
+            row.shmName = shmName;
+
+            QFrame *strip = new QFrame(m_consoleChannelContainer);
+            strip->setProperty("class", "console-strip");
+            QVBoxLayout *sl = new QVBoxLayout(strip);
+            sl->setContentsMargins(8, 10, 8, 10);
+            sl->setSpacing(8);
+
+            // Channel Label (short name)
+            QString shortName = shmName;
+            if (shortName.startsWith("ArthurAudioIPC_")) {
+                shortName = "CH " + shortName.mid(15);
+            }
+            row.nameLabel = new QLabel(shortName, strip);
+            row.nameLabel->setAlignment(Qt::AlignCenter);
+            row.nameLabel->setStyleSheet("font-weight: 800; font-size: 12px; color: #ffffff;");
+            sl->addWidget(row.nameLabel);
+
+            // Mode Selector
+            row.modeSelect = new QComboBox(strip);
+            row.modeSelect->setProperty("class", "custom-select");
+            row.modeSelect->addItem("IN Playback", 0);
+            row.modeSelect->addItem("IN Dry+Mon", 1);
+            row.modeSelect->addItem("IN Rec Wet", 2);
+            row.modeSelect->setStyleSheet("font-size: 10px; padding: 2px 4px;");
+            sl->addWidget(row.modeSelect);
+
+            // Send Knobs Row (Reverb & Delay side-by-side)
+            QHBoxLayout *sendsLayout = new QHBoxLayout();
+            sendsLayout->setSpacing(6);
+
+            // Reverb Send
+            QVBoxLayout *revLayout = new QVBoxLayout();
+            revLayout->setSpacing(2);
+            QLabel *revLbl = new QLabel("REV", strip);
+            revLbl->setAlignment(Qt::AlignCenter);
+            revLbl->setStyleSheet("font-size: 9px; font-weight: 700; color: #a0a5b5;");
+            row.sendReverb = new QDial(strip);
+            row.sendReverb->setRange(0, 100);
+            row.sendReverb->setFixedSize(32, 32);
+            row.sendReverb->setNotchesVisible(false);
+            row.sendReverb->setToolTip("Reverb Send Amount");
+            revLayout->addWidget(revLbl);
+            revLayout->addWidget(row.sendReverb);
+            sendsLayout->addLayout(revLayout);
+
+            // Delay Send
+            QVBoxLayout *dlyLayout = new QVBoxLayout();
+            dlyLayout->setSpacing(2);
+            QLabel *dlyLbl = new QLabel("DLY", strip);
+            dlyLbl->setAlignment(Qt::AlignCenter);
+            dlyLbl->setStyleSheet("font-size: 9px; font-weight: 700; color: #a0a5b5;");
+            row.sendDelay = new QDial(strip);
+            row.sendDelay->setRange(0, 100);
+            row.sendDelay->setFixedSize(32, 32);
+            row.sendDelay->setNotchesVisible(false);
+            row.sendDelay->setToolTip("Delay Send Amount");
+            dlyLayout->addWidget(dlyLbl);
+            dlyLayout->addWidget(row.sendDelay);
+            sendsLayout->addLayout(dlyLayout);
+
+            sl->addLayout(sendsLayout);
+
+            // Fader & Meter Row (Vertical slider and meter side-by-side)
+            QHBoxLayout *faderMeterLayout = new QHBoxLayout();
+            faderMeterLayout->setSpacing(12);
+
+            row.volumeSlider = new QSlider(Qt::Vertical, strip);
+            row.volumeSlider->setRange(0, 100);
+            row.volumeSlider->setValue(80);
+            row.volumeSlider->setFixedHeight(160);
+            row.volumeSlider->setToolTip("Channel Volume Fader");
+
+            row.levelMeter = new QProgressBar(strip);
+            row.levelMeter->setOrientation(Qt::Vertical);
+            row.levelMeter->setRange(0, 100);
+            row.levelMeter->setValue(0);
+            row.levelMeter->setTextVisible(false);
+            row.levelMeter->setFixedHeight(160);
+
+            faderMeterLayout->addWidget(row.volumeSlider, 0, Qt::AlignHCenter);
+            faderMeterLayout->addWidget(row.levelMeter, 0, Qt::AlignHCenter);
+            sl->addLayout(faderMeterLayout);
+
+            // Mute / Solo Button Row
+            QHBoxLayout *muteSoloLayout = new QHBoxLayout();
+            muteSoloLayout->setSpacing(6);
+
+            row.muteBtn = new QPushButton("M", strip);
+            row.muteBtn->setCheckable(true);
+            row.muteBtn->setProperty("class", "btn-mute");
+            row.muteBtn->setCursor(Qt::PointingHandCursor);
+
+            row.soloBtn = new QPushButton("S", strip);
+            row.soloBtn->setCheckable(true);
+            row.soloBtn->setProperty("class", "btn-solo");
+            row.soloBtn->setCursor(Qt::PointingHandCursor);
+
+            muteSoloLayout->addWidget(row.muteBtn);
+            muteSoloLayout->addWidget(row.soloBtn);
+            sl->addLayout(muteSoloLayout);
+
+            if (cl) cl->addWidget(strip);
+            m_consoleRows.append(row);
+
+            // Connect controls to actions and settings save
+            int capturedIdx = rowIdx;
+            connect(row.modeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, [=](int idx) {
+                applyChannelMode(capturedIdx, idx);
+                saveMixerConfig();
+            });
+            connect(row.volumeSlider, &QSlider::valueChanged, this, [=](int) { saveMixerConfig(); });
+            connect(row.sendReverb, &QDial::valueChanged, this, [=](int) { saveMixerConfig(); });
+            connect(row.sendDelay, &QDial::valueChanged, this, [=](int) { saveMixerConfig(); });
+            connect(row.muteBtn, &QPushButton::toggled, this, [=](bool) { saveMixerConfig(); });
+            connect(row.soloBtn, &QPushButton::toggled, this, [=](bool) { saveMixerConfig(); });
+
+            ++rowIdx;
+        }
+    }
+    if (cl) cl->addStretch();
+
+    // 3. Populate 3 Static Busses in m_consoleBussesContainer
+    QHBoxLayout *bl = qobject_cast<QHBoxLayout*>(m_consoleBussesContainer->layout());
+    
+    QStringList busNames = {"Aux 1: Reverb", "Aux 2: Delay", "Master Bus"};
+    for (int i = 0; i < 3; ++i) {
+        ConsoleBusRow bus;
+        bus.name = busNames[i];
+
+        QFrame *strip = new QFrame(m_consoleBussesContainer);
+        strip->setProperty("class", "console-strip-master");
+        QVBoxLayout *sl = new QVBoxLayout(strip);
+        sl->setContentsMargins(8, 10, 8, 10);
+        sl->setSpacing(8);
+
+        // Name label
+        QLabel *lbl = new QLabel(bus.name, strip);
+        lbl->setAlignment(Qt::AlignCenter);
+        lbl->setStyleSheet("font-weight: 800; font-size: 11px; color: #af52de;");
+        sl->addWidget(lbl);
+
+        // Spacer to align faders vertically
+        sl->addSpacing(44); 
+
+        // Fader & Meter Row
+        QHBoxLayout *faderMeterLayout = new QHBoxLayout();
+        faderMeterLayout->setSpacing(12);
+
+        bus.volumeSlider = new QSlider(Qt::Vertical, strip);
+        bus.volumeSlider->setRange(0, 100);
+        bus.volumeSlider->setValue(80);
+        bus.volumeSlider->setFixedHeight(160);
+        bus.volumeSlider->setToolTip(QString("%1 Volume").arg(bus.name));
+
+        bus.levelMeter = new QProgressBar(strip);
+        bus.levelMeter->setOrientation(Qt::Vertical);
+        bus.levelMeter->setRange(0, 100);
+        bus.levelMeter->setValue(0);
+        bus.levelMeter->setTextVisible(false);
+        bus.levelMeter->setFixedHeight(160);
+
+        faderMeterLayout->addWidget(bus.volumeSlider, 0, Qt::AlignHCenter);
+        faderMeterLayout->addWidget(bus.levelMeter, 0, Qt::AlignHCenter);
+        sl->addLayout(faderMeterLayout);
+
+        // Mute button
+        bus.muteBtn = new QPushButton("Mute", strip);
+        bus.muteBtn->setCheckable(true);
+        bus.muteBtn->setProperty("class", "btn-mute");
+        bus.muteBtn->setCursor(Qt::PointingHandCursor);
+        sl->addWidget(bus.muteBtn);
+
+        if (bl) bl->addWidget(strip);
+        m_consoleBusses.append(bus);
+
+        // Connect changes to auto-save
+        connect(bus.volumeSlider, &QSlider::valueChanged, this, [=](int) { saveMixerConfig(); });
+        connect(bus.muteBtn, &QPushButton::toggled, this, [=](bool) { saveMixerConfig(); });
     }
 
-    // Header row
-    QFrame *hdrRow = new QFrame(m_consoleChannelContainer);
-    hdrRow->setStyleSheet("border-bottom: 1px solid rgba(255,255,255,0.06);");
-    QHBoxLayout *hdrLayout = new QHBoxLayout(hdrRow);
-    hdrLayout->setContentsMargins(12, 4, 12, 4);
-    auto makeHdr = [&](const QString &text, int stretch) {
-        QLabel *l = new QLabel(text, hdrRow);
-        l->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px; letter-spacing: 0.5px;");
-        hdrLayout->addWidget(l, stretch);
-    };
-    makeHdr("CHANNEL", 2);
-    makeHdr("CONSOLE MODE", 3);
-    makeHdr("STATUS", 1);
-    cl->addWidget(hdrRow);
-
-    int rowIdx = 0;
-    for (const QString &shmName : shmNames) {
-        ConsoleChannelRow row;
-        row.shmName = shmName;
-
-        QFrame *rowFrame = new QFrame(m_consoleChannelContainer);
-        rowFrame->setProperty("class", "rack-slot");
-        rowFrame->setFixedHeight(52);
-        QHBoxLayout *rl = new QHBoxLayout(rowFrame);
-        rl->setContentsMargins(12, 0, 12, 0);
-
-        // Channel name
-        row.nameLabel = new QLabel(shmName, rowFrame);
-        row.nameLabel->setStyleSheet("font-weight: 600; font-size: 12px;");
-        rl->addWidget(row.nameLabel, 2);
-
-        // Mode selector
-        row.modeSelect = new QComboBox(rowFrame);
-        row.modeSelect->setProperty("class", "custom-select");
-        row.modeSelect->addItem("▶  Playback (Normal)",          0);
-        row.modeSelect->addItem("⏺  Dry Record + Monitor Wet",    1);
-        row.modeSelect->addItem("⏺  Record Wet (Baked FX)",       2);
-        rl->addWidget(row.modeSelect, 3);
-
-        // Status badge
-        row.modeBadge = new QLabel("Playback", rowFrame);
-        row.modeBadge->setProperty("class", "badge badgeBlue");
-        row.modeBadge->setAlignment(Qt::AlignCenter);
-        row.modeBadge->setFixedWidth(90);
-        rl->addWidget(row.modeBadge, 1);
-
-        int capturedIdx = rowIdx;
-        connect(row.modeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, [=](int idx) {
-            applyChannelMode(capturedIdx, idx);
-        });
-
-        cl->addWidget(rowFrame);
-        m_consoleRows.append(row);
-        ++rowIdx;
-    }
-    cl->addStretch();
+    // 4. Load Mixer Config to restore previous state
+    loadMixerConfig();
 }
 
 void MainWindow::applyChannelMode(int rowIdx, int mode) {
@@ -1125,19 +1369,179 @@ void MainWindow::applyChannelMode(int rowIdx, int mode) {
     ConsoleChannelRow &row = m_consoleRows[rowIdx];
 
     // Write console_mode to the SHM segment for this channel
-    QString shmPath = "/dev/shm/" + row.shmName;
     // Use daemon command for safety - daemon validates and writes the SHM field
     QString cmd = QString("CONSOLE_MODE %1 %2").arg(row.shmName).arg(mode);
     sendDaemonCommand(cmd);
+}
 
-    // Update the badge
-    static const QStringList badgeTexts = {"Playback", "Dry+Monitor", "Rec Wet"};
-    static const QStringList badgeClasses = {"badge badgeBlue", "badge badgeGreen", "badge badgeGray"};
-    if (row.modeBadge && mode >= 0 && mode <= 2) {
-        row.modeBadge->setText(badgeTexts[mode]);
-        row.modeBadge->setProperty("class", badgeClasses[mode]);
-        row.modeBadge->style()->unpolish(row.modeBadge);
-        row.modeBadge->style()->polish(row.modeBadge);
+void MainWindow::saveMixerConfig() {
+    if (m_isUpdatingConfig) return;
+
+    QString configDir = QDir::homePath() + "/.config/arthur";
+    QDir().mkpath(configDir);
+    QString path = configDir + "/mixer_settings.json";
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) return;
+
+    QJsonObject root;
+    
+    // Save channels
+    QJsonObject channelsObj;
+    for (const ConsoleChannelRow &row : m_consoleRows) {
+        QJsonObject chan;
+        if (row.volumeSlider) chan["volume"] = row.volumeSlider->value();
+        if (row.sendReverb) chan["reverb"] = row.sendReverb->value();
+        if (row.sendDelay) chan["delay"] = row.sendDelay->value();
+        if (row.muteBtn) chan["mute"] = row.muteBtn->isChecked();
+        if (row.soloBtn) chan["solo"] = row.soloBtn->isChecked();
+        if (row.modeSelect) chan["mode"] = row.modeSelect->currentIndex();
+        channelsObj[row.shmName] = chan;
+    }
+    root["channels"] = channelsObj;
+
+    // Save busses
+    QJsonObject bussesObj;
+    for (const ConsoleBusRow &bus : m_consoleBusses) {
+        QJsonObject b;
+        if (bus.volumeSlider) b["volume"] = bus.volumeSlider->value();
+        if (bus.muteBtn) b["mute"] = bus.muteBtn->isChecked();
+        bussesObj[bus.name] = b;
+    }
+    root["busses"] = bussesObj;
+
+    QJsonDocument doc(root);
+    file.write(doc.toJson());
+    file.close();
+}
+
+void MainWindow::loadMixerConfig() {
+    QString path = QDir::homePath() + "/.config/arthur/mixer_settings.json";
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return;
+
+    QByteArray data = file.readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull() || !doc.isObject()) return;
+
+    QJsonObject root = doc.object();
+    QJsonObject channelsObj = root["channels"].toObject();
+    QJsonObject bussesObj = root["busses"].toObject();
+
+    m_isUpdatingConfig = true; // prevent loop saves while setting UI values
+
+    // Apply to channels
+    for (ConsoleChannelRow &row : m_consoleRows) {
+        if (channelsObj.contains(row.shmName)) {
+            QJsonObject chan = channelsObj[row.shmName].toObject();
+            if (row.volumeSlider && chan.contains("volume")) {
+                row.volumeSlider->setValue(chan["volume"].toInt());
+            }
+            if (row.sendReverb && chan.contains("reverb")) {
+                row.sendReverb->setValue(chan["reverb"].toInt());
+            }
+            if (row.sendDelay && chan.contains("delay")) {
+                row.sendDelay->setValue(chan["delay"].toInt());
+            }
+            if (row.muteBtn && chan.contains("mute")) {
+                row.muteBtn->setChecked(chan["mute"].toBool());
+            }
+            if (row.soloBtn && chan.contains("solo")) {
+                row.soloBtn->setChecked(chan["solo"].toBool());
+            }
+            if (row.modeSelect && chan.contains("mode")) {
+                row.modeSelect->setCurrentIndex(chan["mode"].toInt());
+            }
+        }
+    }
+
+    // Apply to busses
+    for (ConsoleBusRow &bus : m_consoleBusses) {
+        if (bussesObj.contains(bus.name)) {
+            QJsonObject b = bussesObj[bus.name].toObject();
+            if (bus.volumeSlider && b.contains("volume")) {
+                bus.volumeSlider->setValue(b["volume"].toInt());
+            }
+            if (bus.muteBtn && b.contains("mute")) {
+                bus.muteBtn->setChecked(b["mute"].toBool());
+            }
+        }
+    }
+
+    m_isUpdatingConfig = false;
+}
+
+void MainWindow::updateMeterAnimations() {
+    // Determine if system is active (lock is active)
+    bool active = false;
+    QProcess pgrep;
+    pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
+    pgrep.waitForFinished(100);
+    if (pgrep.exitCode() == 0) {
+        active = true;
+    }
+
+    // Channel peak meter simulation
+    for (ConsoleChannelRow &row : m_consoleRows) {
+        if (!row.levelMeter) continue;
+        int currentVal = row.levelMeter->value();
+        int targetVal = 0;
+        
+        bool isMuted = row.muteBtn && row.muteBtn->isChecked();
+        if (active && !isMuted) {
+            // Fluctuates around a standard dynamic level
+            targetVal = 30 + QRandomGenerator::global()->bounded(55);
+            if (row.volumeSlider) {
+                targetVal = (targetVal * row.volumeSlider->value()) / 100;
+            }
+        } else {
+            targetVal = 0;
+        }
+
+        int nextVal;
+        if (targetVal > currentVal) {
+            nextVal = currentVal + (targetVal - currentVal) * 0.7; // rapid attack
+        } else {
+            nextVal = currentVal - (currentVal - targetVal) * 0.25; // slow decay
+        }
+        row.levelMeter->setValue(qBound(0, nextVal, 100));
+    }
+
+    // Busses peak meter simulation
+    for (ConsoleBusRow &bus : m_consoleBusses) {
+        if (!bus.levelMeter) continue;
+        int currentVal = bus.levelMeter->value();
+        int targetVal = 0;
+
+        bool isMuted = bus.muteBtn && bus.muteBtn->isChecked();
+        if (active && !isMuted) {
+            int sum = 0;
+            int count = 0;
+            for (const ConsoleChannelRow &row : m_consoleRows) {
+                if (row.levelMeter && !(row.muteBtn && row.muteBtn->isChecked())) {
+                    sum += row.levelMeter->value();
+                    count++;
+                }
+            }
+            if (count > 0) {
+                targetVal = sum / count + QRandomGenerator::global()->bounded(10) - 5;
+            } else {
+                targetVal = 30 + QRandomGenerator::global()->bounded(20);
+            }
+            if (bus.volumeSlider) {
+                targetVal = (targetVal * bus.volumeSlider->value()) / 100;
+            }
+        } else {
+            targetVal = 0;
+        }
+
+        int nextVal;
+        if (targetVal > currentVal) {
+            nextVal = currentVal + (targetVal - currentVal) * 0.6;
+        } else {
+            nextVal = currentVal - (currentVal - targetVal) * 0.2;
+        }
+        bus.levelMeter->setValue(qBound(0, nextVal, 100));
     }
 }
 
@@ -1179,6 +1583,46 @@ void MainWindow::querySystemStatus() {
         active
     );
     updateMidiSyncCard(active);
+
+    // Discover active SHM slots via arthur-daemon (with fast timeout)
+    QStringList currentShms;
+    QString response = "";
+    QLocalSocket sock;
+    QString sockPath = "/tmp/arthur.sock";
+    QByteArray xdg = qgetenv("XDG_RUNTIME_DIR");
+    if (!xdg.isEmpty()) {
+        sockPath = QString(xdg) + "/arthur.sock";
+    }
+    sock.connectToServer(sockPath);
+    if (sock.waitForConnected(200)) {
+        sock.write("LIST_SHM\n");
+        sock.flush();
+        sock.waitForReadyRead(300);
+        response = QString::fromUtf8(sock.readAll()).trimmed();
+        sock.disconnectFromServer();
+    }
+
+    if (!response.isEmpty() && !response.startsWith("ERROR")) {
+        currentShms = response.split('\n', Qt::SkipEmptyParts);
+    }
+
+    // Fallback: scan /dev/shm for ArthurAudioIPC* entries
+    if (currentShms.isEmpty()) {
+        QDir devShm("/dev/shm");
+        for (const QString &entry : devShm.entryList(QStringList() << "ArthurAudioIPC*", QDir::Files)) {
+            currentShms.append(entry);
+        }
+    }
+
+    // Sort to make sure comparison is independent of order
+    currentShms.sort();
+    QStringList lastScannedSorted = m_lastScannedShms;
+    lastScannedSorted.sort();
+
+    if (currentShms != lastScannedSorted) {
+        m_lastScannedShms = currentShms;
+        rebuildConsoleChannels();
+    }
 }
 
 void MainWindow::updateGlobalStatus(const QString &title, const QString &description, bool active) {

@@ -14,6 +14,7 @@
 #include <QProcess>
 #include <QList>
 #include <QDialog>
+#include <QDial>
 #include <QLineEdit>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -77,6 +78,7 @@ private slots:
     void runSystemTuning();
     void readTuningOutput();
     void handleTuningFinished(int exitCode, QProcess::ExitStatus status);
+    void updateMeterAnimations();
 
 private:
     void initUi();
@@ -101,18 +103,35 @@ private:
     QWidget *m_settingsTab;
     QWidget *m_consoleTab;
 
-    // VHC Console Mode: per-channel mode selectors & SHM fds
     struct ConsoleChannelRow {
         QLabel *nameLabel = nullptr;
         QComboBox *modeSelect = nullptr;
-        QLabel *modeBadge = nullptr;
+        QSlider *volumeSlider = nullptr;
+        QProgressBar *levelMeter = nullptr;
+        QDial *sendReverb = nullptr;
+        QDial *sendDelay = nullptr;
+        QPushButton *muteBtn = nullptr;
+        QPushButton *soloBtn = nullptr;
         QString shmName;
     };
     QList<ConsoleChannelRow> m_consoleRows;
+
+    struct ConsoleBusRow {
+        QString name;
+        QSlider *volumeSlider = nullptr;
+        QProgressBar *levelMeter = nullptr;
+        QPushButton *muteBtn = nullptr;
+    };
+    QList<ConsoleBusRow> m_consoleBusses;
+
     QWidget *m_consoleChannelContainer = nullptr;
+    QWidget *m_consoleBussesContainer = nullptr;
     QPushButton *m_consoleScanBtn = nullptr;
+
     void rebuildConsoleChannels();
     void applyChannelMode(int rowIdx, int mode);
+    void saveMixerConfig();
+    void loadMixerConfig();
 
     // Sidebar status
     QLabel *m_statusDot;
@@ -181,6 +200,8 @@ private:
     QProcess *m_tuningProcess;
     QTimer *m_statusTimer;
     QTimer *m_midiJitterTimer;
+    QTimer *m_meterTimer;
+    QStringList m_lastScannedShms;
 };
 
 #endif // MAINWINDOW_H
