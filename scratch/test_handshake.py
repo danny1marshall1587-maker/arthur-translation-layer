@@ -4,7 +4,13 @@ import time
 import sys
 import os
 
-SOCKET_PATH = "/tmp/arthur.sock"
+def get_socket_path():
+    xdg = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg:
+        return os.path.join(xdg, "arthur.sock")
+    return "/tmp/arthur.sock"
+
+SOCKET_PATH = get_socket_path()
 
 def run_test(scenario_name, expect_timeout=False):
     print(f"\n--- Running Scenario: {scenario_name} ---")

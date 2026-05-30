@@ -49,13 +49,21 @@ jobs:
 
       - name: Build Wine Guest and Agent Binaries
         run: |
-          wineg++ -O2 -I. guest.cpp -o build/arthur-guest.exe -lpthread
+          wineg++ -O2 -I. archive/guest_legacy.cpp -o build/arthur-guest.exe -lpthread
           wineg++ -O2 -I. -Ivst3_headers win_guest_agent.cpp vstiids.cpp -o build/win_guest_agent.exe -lpthread
           mkdir -p bin
           cp build/arthur-guest.exe bin/
           cp build/arthur-guest.exe.so bin/
           cp build/win_guest_agent.exe bin/
           cp build/win_guest_agent.exe.so bin/
+
+      - name: Run Arthur Closed-Loop Stress Test
+        run: |
+          rm -f /tmp/arthur.sock
+          ./build/arthur-daemon &
+          sleep 2
+          ./build/arthur_stress_test
+          killall -9 arthur-daemon wine wineserver || true
 
       - name: Package Flatpak Bundle
         run: |

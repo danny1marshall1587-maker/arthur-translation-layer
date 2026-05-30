@@ -7,7 +7,7 @@
 #include "control-protocol.h"
 #include <cstring>
 
-namespace Arthur {
+namespace arthur::ipc {
     // Basic implementation for CI to pass
     void ControlProtocol::initialize() {
         // Stub

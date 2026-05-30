@@ -317,10 +317,17 @@ void MainWindow::initUi() {
     btnSettings->setFixedHeight(36);
     btnSettings->setProperty("class", "navBtn");
 
+    QPushButton *btnConsole = new QPushButton("  VHC Console", m_sidebar);
+    btnConsole->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaVolume));
+    btnConsole->setCursor(Qt::PointingHandCursor);
+    btnConsole->setFixedHeight(36);
+    btnConsole->setProperty("class", "navBtn");
+
     sidebarLayout->addWidget(btnDashboard);
     sidebarLayout->addWidget(btnInstaller);
     sidebarLayout->addWidget(btnRack);
     sidebarLayout->addWidget(btnSettings);
+    sidebarLayout->addWidget(btnConsole);
     sidebarLayout->addStretch();
 
     // Global Status Dot Indicator (Sidebar Bottom)
@@ -347,38 +354,17 @@ void MainWindow::initUi() {
     mainLayout->addWidget(m_contentArea);
 
     // Connect Navigation Button Clicks to Stack switches
-    connect(btnDashboard, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", true); btnInstaller->setProperty("active", false); btnRack->setProperty("active", false); btnSettings->setProperty("active", false);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showDashboard();
-    });
-    connect(btnInstaller, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", false); btnInstaller->setProperty("active", true); btnRack->setProperty("active", false); btnSettings->setProperty("active", false);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showInstaller();
-    });
-    connect(btnRack, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", false); btnInstaller->setProperty("active", false); btnRack->setProperty("active", true); btnSettings->setProperty("active", false);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showRack();
-    });
-    connect(btnSettings, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", false); btnInstaller->setProperty("active", false); btnRack->setProperty("active", false); btnSettings->setProperty("active", true);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showSettings();
-    });
+    auto refreshBtns = [=](QPushButton* active) {
+        for (QPushButton *b : {btnDashboard, btnInstaller, btnRack, btnSettings, btnConsole}) {
+            b->setProperty("active", (b == active));
+            b->style()->unpolish(b); b->style()->polish(b);
+        }
+    };
+    connect(btnDashboard, &QPushButton::clicked, this, [=]() { refreshBtns(btnDashboard); showDashboard(); });
+    connect(btnInstaller, &QPushButton::clicked, this, [=]() { refreshBtns(btnInstaller); showInstaller(); });
+    connect(btnRack,      &QPushButton::clicked, this, [=]() { refreshBtns(btnRack);      showRack();      });
+    connect(btnSettings,  &QPushButton::clicked, this, [=]() { refreshBtns(btnSettings);  showSettings();  });
+    connect(btnConsole,   &QPushButton::clicked, this, [=]() { refreshBtns(btnConsole);   showConsole();   });
 
     // =========================================================================
     // Stack 1: Dashboard Tab
@@ -515,7 +501,7 @@ void MainWindow::initUi() {
     for (int i = 0; i < 20; ++i) {
         QFrame *bar = new QFrame(graphFrame);
         bar->setStyleSheet("background-color: #007aff; border-radius: 3px;");
-        bar->setFixedHeight(20 + rand() % 25);
+        bar->setFixedHeight(20 + QRandomGenerator::global()->bounded(25));
         bar->setFixedWidth(10);
         m_latencyBars.append(bar);
         graphInnerLayout->addWidget(bar, 0, Qt::AlignBottom);
@@ -531,7 +517,7 @@ void MainWindow::initUi() {
         bool active = m_midiSlaveCheck ? m_midiSlaveCheck->isChecked() : true;
         for (QWidget *bar : m_latencyBars) {
             if (active) {
-                int height = 10 + rand() % 35;
+                int height = 10 + QRandomGenerator::global()->bounded(35);
                 bar->setFixedHeight(height);
                 bar->setStyleSheet("background-color: #007aff; border-radius: 3px; opacity: 1.0;");
             } else {
@@ -882,6 +868,7 @@ void MainWindow::initUi() {
 
     // Wide Tuning Card
     QFrame *tuningCard = new QFrame(m_settingsTab);
+    m_tuningCard = tuningCard;
     tuningCard->setProperty("class", "card");
     QVBoxLayout *tuneLayout = new QVBoxLayout(tuningCard);
     
@@ -975,7 +962,7 @@ void MainWindow::initUi() {
     tOkBtn->setCursor(Qt::PointingHandCursor);
     connect(tOkBtn, &QPushButton::clicked, this, [=]() {
         m_tuningStatusCard->setVisible(false);
-        m_tuningStatusCard->setVisible(true); // reset
+        m_tuningCard->setVisible(true);
     });
 
     tStatLayout->addWidget(m_tuningStatusTitle);
@@ -984,6 +971,78 @@ void MainWindow::initUi() {
     setTabMainLayout->addWidget(m_tuningStatusCard);
 
     m_contentArea->addWidget(m_settingsTab);
+
+    // =========================================================================
+    // Stack 5: VHC Console Tab
+    // =========================================================================
+    m_consoleTab = new QWidget(this);
+    QVBoxLayout *consLayout = new QVBoxLayout(m_consoleTab);
+    consLayout->setSpacing(10);
+    consLayout->setContentsMargins(10, 10, 10, 10);
+
+    QLabel *consTitle = new QLabel("Virtual Hybrid Console (VHC)", m_consoleTab);
+    consTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
+    QLabel *consSub = new QLabel("Set per-channel routing mode. Monitor Mode bypasses effects to record the dry signal while monitoring the wet processed audio.", m_consoleTab);
+    consSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
+    consLayout->addWidget(consTitle);
+    consLayout->addWidget(consSub);
+
+    // Info card explaining the three modes
+    QFrame *modeInfoCard = new QFrame(m_consoleTab);
+    modeInfoCard->setProperty("class", "card");
+    QHBoxLayout *modeInfoLayout = new QHBoxLayout(modeInfoCard);
+    modeInfoLayout->setSpacing(20);
+
+    auto makeModeInfo = [&](const QString &icon, const QString &name, const QString &desc, const QString &color) {
+        QVBoxLayout *l = new QVBoxLayout();
+        l->setSpacing(4);
+        QLabel *ico = new QLabel(icon, modeInfoCard);
+        ico->setAlignment(Qt::AlignCenter);
+        ico->setStyleSheet(QString("font-size: 28px; background-color: %1; border-radius: 8px; padding: 6px;").arg(color));
+        ico->setFixedSize(48, 48);
+        QLabel *nm = new QLabel(name, modeInfoCard);
+        nm->setStyleSheet("font-weight: 700; font-size: 12px;");
+        QLabel *ds = new QLabel(desc, modeInfoCard);
+        ds->setStyleSheet("color: #a0a5b5; font-size: 11px;");
+        ds->setWordWrap(true);
+        l->addWidget(ico, 0, Qt::AlignHCenter);
+        l->addWidget(nm);
+        l->addWidget(ds);
+        return l;
+    };
+    modeInfoLayout->addLayout(makeModeInfo("▶", "Playback (Mode 0)", "Processed wet signal sent to main output. Default mode for normal playback.", "rgba(0,122,255,0.12)"));
+    modeInfoLayout->addLayout(makeModeInfo("⏺", "Dry+Monitor (Mode 1)", "Raw dry input sent to DAW for recording. Wet signal routed to monitor bus so you still hear effects.", "rgba(255,149,0,0.12)"));
+    modeInfoLayout->addLayout(makeModeInfo("⏺", "Record Wet (Mode 2)", "Processed wet signal sent directly to DAW main output for recording. Bakes effects in.", "rgba(255,59,48,0.12)"));
+    consLayout->addWidget(modeInfoCard);
+
+    // Scan Button Header
+    QFrame *scanHeader = new QFrame(m_consoleTab);
+    scanHeader->setProperty("class", "card");
+    QHBoxLayout *scanHeaderLayout = new QHBoxLayout(scanHeader);
+    scanHeaderLayout->setContentsMargins(15, 10, 15, 10);
+    QLabel *scanLabel = new QLabel("Active Channel Slots", scanHeader);
+    scanLabel->setStyleSheet("font-weight: 700; font-size: 14px; color: #ffffff;");
+    m_consoleScanBtn = new QPushButton("Scan SHM Channels", scanHeader);
+    m_consoleScanBtn->setProperty("class", "settings-btn");
+    m_consoleScanBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_consoleScanBtn, &QPushButton::clicked, this, &MainWindow::rebuildConsoleChannels);
+    scanHeaderLayout->addWidget(scanLabel);
+    scanHeaderLayout->addStretch();
+    scanHeaderLayout->addWidget(m_consoleScanBtn);
+    consLayout->addWidget(scanHeader);
+
+    // Scrollable channel container
+    QScrollArea *consScrollArea = new QScrollArea(m_consoleTab);
+    consScrollArea->setWidgetResizable(true);
+    consScrollArea->setFrameShape(QFrame::NoFrame);
+    consScrollArea->setStyleSheet("background-color: transparent;");
+    m_consoleChannelContainer = new QWidget();
+    m_consoleChannelContainer->setStyleSheet("background-color: transparent;");
+    new QVBoxLayout(m_consoleChannelContainer);
+    consScrollArea->setWidget(m_consoleChannelContainer);
+    consLayout->addWidget(consScrollArea, 1);
+
+    m_contentArea->addWidget(m_consoleTab);
 }
 
 void MainWindow::showDashboard() {
@@ -999,6 +1058,139 @@ void MainWindow::showRack() {
 }
 void MainWindow::showSettings() {
     m_contentArea->setCurrentWidget(m_settingsTab);
+}
+void MainWindow::showConsole() {
+    m_contentArea->setCurrentWidget(m_consoleTab);
+    rebuildConsoleChannels();
+}
+
+// =============================================================================
+// VHC Console Mode - Channel Management
+// =============================================================================
+void MainWindow::rebuildConsoleChannels() {
+    m_consoleRows.clear();
+
+    // Delete all old children in the container layout
+    QLayout *existingLayout = m_consoleChannelContainer->layout();
+    QLayoutItem *item;
+    while ((item = existingLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    // Discover active SHM slots via arthur-daemon
+    QStringList shmNames;
+    QString response = "";
+    QLocalSocket sock;
+    sock.connectToServer("/tmp/arthur-daemon.sock");
+    if (sock.waitForConnected(500)) {
+        sock.write("LIST_SHM\n");
+        sock.flush();
+        sock.waitForReadyRead(1000);
+        response = QString::fromUtf8(sock.readAll()).trimmed();
+        sock.disconnectFromServer();
+    }
+
+    if (!response.isEmpty() && !response.startsWith("ERROR")) {
+        shmNames = response.split('\n', Qt::SkipEmptyParts);
+    }
+
+    // Fallback: scan /dev/shm for ArthurAudioIPC* entries
+    if (shmNames.isEmpty()) {
+        QDir devShm("/dev/shm");
+        for (const QString &entry : devShm.entryList(QStringList() << "ArthurAudioIPC*", QDir::Files)) {
+            shmNames.append(entry);
+        }
+    }
+
+    QVBoxLayout *cl = qobject_cast<QVBoxLayout*>(m_consoleChannelContainer->layout());
+
+    if (shmNames.isEmpty()) {
+        QLabel *emptyLabel = new QLabel("No active Arthur channel slots found.\nLoad a plugin in the DSP Rack or connect your DAW.", m_consoleChannelContainer);
+        emptyLabel->setAlignment(Qt::AlignCenter);
+        emptyLabel->setStyleSheet("color: #a0a5b5; font-size: 13px; margin: 40px;");
+        cl->addWidget(emptyLabel);
+        cl->addStretch();
+        return;
+    }
+
+    // Header row
+    QFrame *hdrRow = new QFrame(m_consoleChannelContainer);
+    hdrRow->setStyleSheet("border-bottom: 1px solid rgba(255,255,255,0.06);");
+    QHBoxLayout *hdrLayout = new QHBoxLayout(hdrRow);
+    hdrLayout->setContentsMargins(12, 4, 12, 4);
+    auto makeHdr = [&](const QString &text, int stretch) {
+        QLabel *l = new QLabel(text, hdrRow);
+        l->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px; letter-spacing: 0.5px;");
+        hdrLayout->addWidget(l, stretch);
+    };
+    makeHdr("CHANNEL", 2);
+    makeHdr("CONSOLE MODE", 3);
+    makeHdr("STATUS", 1);
+    cl->addWidget(hdrRow);
+
+    int rowIdx = 0;
+    for (const QString &shmName : shmNames) {
+        ConsoleChannelRow row;
+        row.shmName = shmName;
+
+        QFrame *rowFrame = new QFrame(m_consoleChannelContainer);
+        rowFrame->setProperty("class", "rack-slot");
+        rowFrame->setFixedHeight(52);
+        QHBoxLayout *rl = new QHBoxLayout(rowFrame);
+        rl->setContentsMargins(12, 0, 12, 0);
+
+        // Channel name
+        row.nameLabel = new QLabel(shmName, rowFrame);
+        row.nameLabel->setStyleSheet("font-weight: 600; font-size: 12px;");
+        rl->addWidget(row.nameLabel, 2);
+
+        // Mode selector
+        row.modeSelect = new QComboBox(rowFrame);
+        row.modeSelect->setProperty("class", "custom-select");
+        row.modeSelect->addItem("▶  Playback (Normal)",          0);
+        row.modeSelect->addItem("⏺  Dry Record + Monitor Wet",    1);
+        row.modeSelect->addItem("⏺  Record Wet (Baked FX)",       2);
+        rl->addWidget(row.modeSelect, 3);
+
+        // Status badge
+        row.modeBadge = new QLabel("Playback", rowFrame);
+        row.modeBadge->setProperty("class", "badge badgeBlue");
+        row.modeBadge->setAlignment(Qt::AlignCenter);
+        row.modeBadge->setFixedWidth(90);
+        rl->addWidget(row.modeBadge, 1);
+
+        int capturedIdx = rowIdx;
+        connect(row.modeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, [=](int idx) {
+            applyChannelMode(capturedIdx, idx);
+        });
+
+        cl->addWidget(rowFrame);
+        m_consoleRows.append(row);
+        ++rowIdx;
+    }
+    cl->addStretch();
+}
+
+void MainWindow::applyChannelMode(int rowIdx, int mode) {
+    if (rowIdx < 0 || rowIdx >= m_consoleRows.size()) return;
+    ConsoleChannelRow &row = m_consoleRows[rowIdx];
+
+    // Write console_mode to the SHM segment for this channel
+    QString shmPath = "/dev/shm/" + row.shmName;
+    // Use daemon command for safety - daemon validates and writes the SHM field
+    QString cmd = QString("CONSOLE_MODE %1 %2").arg(row.shmName).arg(mode);
+    sendDaemonCommand(cmd);
+
+    // Update the badge
+    static const QStringList badgeTexts = {"Playback", "Dry+Monitor", "Rec Wet"};
+    static const QStringList badgeClasses = {"badge badgeBlue", "badge badgeGreen", "badge badgeGray"};
+    if (row.modeBadge && mode >= 0 && mode <= 2) {
+        row.modeBadge->setText(badgeTexts[mode]);
+        row.modeBadge->setProperty("class", badgeClasses[mode]);
+        row.modeBadge->style()->unpolish(row.modeBadge);
+        row.modeBadge->style()->polish(row.modeBadge);
+    }
 }
 
 // =============================================================================
@@ -1017,7 +1209,7 @@ void MainWindow::querySystemStatus() {
     // VDC Load calculation simulation or query
     float vdcLoad = 34.8f;
     if (active) {
-        vdcLoad = 30.0f + (rand() % 150) / 10.0f;
+        vdcLoad = 30.0f + QRandomGenerator::global()->bounded(150) / 10.0f;
     } else {
         vdcLoad = 0.0f;
     }
@@ -1101,7 +1293,7 @@ void MainWindow::loadAudioConfig() {
         
         // Fallback interface
         if (m_audioInterfaceSelect->count() == 0) {
-            m_audioInterfaceSelect->addItem("EVO4 Pro (Fallback)", "alsa_output.usb-Audient_EVO4-00.pro-output-0");
+            m_audioInterfaceSelect->addItem("No audio interfaces found", "");
         }
 
         // Check if config file exists
@@ -1306,44 +1498,51 @@ void MainWindow::applyAudioConfig() {
 
     bool flatpakMode = QFile::exists("/.flatpak-info");
 
-    // Set default sink
-    if (flatpakMode) {
-        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pactl" << "set-default-sink" << interface);
-    } else {
-        QProcess::execute("pactl", QStringList() << "set-default-sink" << interface);
-    }
+    updateGlobalStatus("⚡ Applying", "Applying audio configuration...", true);
 
-    // Set force-rate
-    if (flatpakMode) {
-        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
-    } else {
-        QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
-    }
+    std::thread([=]() {
+        bool flatpakMode = QFile::exists("/.flatpak-info");
 
-    // Set force-quantum
-    if (flatpakMode) {
-        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
-    } else {
-        QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
-    }
-
-    // Slaving daemon control
-    if (slaveMidi) {
-        QProcess pgrep;
-        pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
-        pgrep.waitForFinished(500);
-        if (pgrep.exitCode() != 0) {
-            // Spawn midi_sync
-            QProcess::startDetached(QCoreApplication::applicationDirPath() + "/midi_sync", QStringList());
+        // Set default sink
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pactl" << "set-default-sink" << interface);
+        } else {
+            QProcess::execute("pactl", QStringList() << "set-default-sink" << interface);
         }
-    } else {
-        QProcess::execute("pkill", QStringList() << "-x" << "midi_sync");
-    }
 
-    updateGlobalStatus("✓ Sync Active", "Audio settings updated successfully.", true);
+        // Set force-rate
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+        } else {
+            QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+        }
 
-    // Save the config values since they have changed
-    saveAudioConfig();
+        // Set force-quantum
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+        } else {
+            QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+        }
+
+        // Slaving daemon control
+        if (slaveMidi) {
+            QProcess pgrep;
+            pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
+            pgrep.waitForFinished(500);
+            if (pgrep.exitCode() != 0) {
+                // Spawn midi_sync
+                QProcess::startDetached(QCoreApplication::applicationDirPath() + "/midi_sync", QStringList());
+            }
+        } else {
+            QProcess::execute("pkill", QStringList() << "-x" << "midi_sync");
+        }
+
+        QMetaObject::invokeMethod(this, [=]() {
+            updateGlobalStatus("✓ Sync Active", "Audio settings updated successfully.", true);
+            // Save the config values since they have changed
+            saveAudioConfig();
+        });
+    }).detach();
 }
 
 void MainWindow::saveAudioConfig() {
@@ -1449,6 +1648,9 @@ void MainWindow::startCllsCalibration(int slotIdx) {
 
     QString alignerName = QString("CLLS-Aligner-%1").arg(slotIdx + 1);
 
+    if (slot.process) {
+        slot.process->deleteLater();
+    }
     slot.process = new QProcess(this);
     slot.process->setProcessChannelMode(QProcess::MergedChannels);
     connect(slot.process, &QProcess::readyReadStandardOutput, this, [=]() { readCllsOutput(slotIdx); });
@@ -1472,33 +1674,53 @@ void MainWindow::startCllsCalibration(int slotIdx) {
             }
         }
         
+        QList<QString> interfacePlaybackPorts;
+        for (const QString &port : allPorts) {
+            if (port.startsWith(interface) && port.contains("playback")) {
+                interfacePlaybackPorts.append(port);
+            }
+        }
+        
         QString anchor1 = interfaceCapturePorts.size() > 0 ? interfaceCapturePorts[0] : QString("%1:capture_AUX0").arg(inputInterface);
         QString anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
+        QString playDest1 = interfacePlaybackPorts.size() > 0 ? interfacePlaybackPorts[0] : QString("%1:playback_AUX0").arg(interface);
+        QString playDest2 = interfacePlaybackPorts.size() > 1 ? interfacePlaybackPorts[1] : QString("%1:playback_AUX1").arg(interface);
 
-        // Link
-        int code1 = -1;
-        int code2 = -1;
-        bool flatpakMode = QFile::exists("/.flatpak-info");
-        if (flatpakMode) {
-            code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
-            code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
-        } else {
-            code1 = QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
-            code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
-            QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
-            QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
-        }
+        // Link in a background thread to prevent blocking main GUI thread
+        std::thread([=]() {
+            int code1 = -1;
+            int code2 = -1;
+            bool flatpakMode = QFile::exists("/.flatpak-info");
+            if (flatpakMode) {
+                code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
+                code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_2").arg(alignerName) << playDest1);
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_3").arg(alignerName) << playDest2);
+            } else {
+                code1 = QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
+                code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << QString("%1:output_2").arg(alignerName) << playDest1);
+                QProcess::execute("pw-link", QStringList() << QString("%1:output_3").arg(alignerName) << playDest2);
+            }
 
-        if (code1 == 0 && code2 == 0) {
-            slot.statusBadge->setText("Awaiting Loopback");
-            slot.statusBadge->setStyleSheet("background-color: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
-        } else {
-            slot.statusBadge->setText("Link Error");
-            slot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
-            updateGlobalStatus("⚠ Link Error", QString("pw-link failed to route Slot %1. Check audio configurations.").arg(slotIdx + 1), false);
-        }
+            QMetaObject::invokeMethod(this, [=]() {
+                if (slotIdx >= 0 && slotIdx < 3) {
+                    CllsSlot &cllsSlot = m_cllsSlots[slotIdx];
+                    if (code1 == 0 && code2 == 0) {
+                        cllsSlot.statusBadge->setText("Awaiting Loopback");
+                        cllsSlot.statusBadge->setStyleSheet("background-color: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+                    } else {
+                        cllsSlot.statusBadge->setText("Link Error");
+                        cllsSlot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+                        updateGlobalStatus("⚠ Link Error", QString("pw-link failed to route Slot %1. Check audio configurations.").arg(slotIdx + 1), false);
+                    }
+                }
+            });
+        }).detach();
     });
 }
 
@@ -1544,7 +1766,7 @@ void MainWindow::readCllsOutput(int slotIdx) {
             }
 
             if (slotIdx == 0) {
-                int jitterNs = 100 + rand() % 400;
+                int jitterNs = 100 + QRandomGenerator::global()->bounded(400);
                 float jitterSamples = jitterNs / 1000000000.0f * m_activeSampleRate;
                 if (m_cllsJitterVal) m_cllsJitterVal->setText(QString("±%1 ns (±%2 samples)").arg(jitterNs).arg(jitterSamples, 0, 'f', 4));
             }
@@ -1686,37 +1908,9 @@ QList<QString> MainWindow::queryPipeWirePorts() {
     }
     // Fallbacks if empty
     if (ports.isEmpty()) {
-        // EVO4 Pro Playback, Capture, Monitor (all 4 channels)
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0");
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX1");
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX2");
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX3");
-        
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX1");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX2");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX3");
-
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX0");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX1");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX2");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX3");
-
-        // HeadRush Flex Prime (all 4 channels)
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_FL");
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_FR");
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_RL");
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_RR");
-
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_FL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_FR");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_RL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_RR");
-
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_FL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_FR");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_RL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_RR");
+        QMetaObject::invokeMethod(QApplication::instance(), []() {
+            QMessageBox::warning(nullptr, "PipeWire Error", "No active PipeWire audio ports were detected. Please ensure the PipeWire daemon is running.");
+        });
     }
     return ports;
 }
@@ -2050,8 +2244,8 @@ void MainWindow::renderRackGrid() {
         QCheckBox *chkActive = new QCheckBox(rowFrame);
         chkActive->setFixedWidth(60);
         chkActive->setChecked(slot.active);
-        connect(chkActive, &QCheckBox::toggled, this, [=, &slot](bool checked) {
-            slot.active = checked;
+        connect(chkActive, &QCheckBox::toggled, this, [=](bool checked) {
+            m_currentProfile.vdc_slots[i].active = checked;
         });
 
         // 2. Plugin Selector
@@ -2070,10 +2264,10 @@ void MainWindow::renderRackGrid() {
         if (plugIdx >= 0) {
             cmbPlugin->setCurrentIndex(plugIdx);
         } else if (cmbPlugin->count() > 0) {
-            slot.vst3_dll_path = cmbPlugin->currentData().toString();
+            m_currentProfile.vdc_slots[i].vst3_dll_path = cmbPlugin->currentData().toString();
         }
-        connect(cmbPlugin, &QComboBox::currentTextChanged, this, [=, &slot](const QString &text) {
-            slot.vst3_dll_path = text;
+        connect(cmbPlugin, &QComboBox::currentTextChanged, this, [=](const QString &text) {
+            m_currentProfile.vdc_slots[i].vst3_dll_path = text;
         });
 
         // 3. Delete Button
@@ -2131,6 +2325,10 @@ void MainWindow::startInstaller(const QString &filePath) {
         m_installConsole->append(QString("Initializing installation pipeline for: %1\n").arg(filePath));
     }
 
+    if (m_installerProcess) {
+        m_installerProcess->kill();
+        m_installerProcess->deleteLater();
+    }
     m_installerProcess = new QProcess(this);
     connect(m_installerProcess, &QProcess::readyReadStandardOutput, this, &MainWindow::readInstallerOutput);
     connect(m_installerProcess, &QProcess::readyReadStandardError, this, &MainWindow::readInstallerOutput);
@@ -2207,7 +2405,7 @@ void MainWindow::runSystemTuning() {
     int coresVal = m_coresSlider->value();
     QString targetCores = coresVal <= 4 ? "4" : QString("4-%1").arg(coresVal);
 
-    m_tuningStatusCard->setVisible(false);
+    m_tuningCard->setVisible(false);
     m_tuningStatusCard->setVisible(false);
     m_tuningProgressCard->setVisible(true);
 
@@ -2216,6 +2414,10 @@ void MainWindow::runSystemTuning() {
     m_tuningConsole->clear();
     m_tuningConsole->append("Starting System Setup Wizard...\n");
 
+    if (m_tuningProcess) {
+        m_tuningProcess->kill();
+        m_tuningProcess->deleteLater();
+    }
     m_tuningProcess = new QProcess(this);
     connect(m_tuningProcess, &QProcess::readyReadStandardOutput, this, &MainWindow::readTuningOutput);
     connect(m_tuningProcess, &QProcess::readyReadStandardError, this, &MainWindow::readTuningOutput);

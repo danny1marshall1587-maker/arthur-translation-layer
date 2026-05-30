@@ -577,10 +577,10 @@ fn run_clls_calibration(window: tauri::Window, interface: String, channel: Strin
             format!("{}:playback_AUX3", interface_clone)
         };
 
-        connect_pipewire_ports("CLLS-Aligner:output_0", &play_port);
-        connect_pipewire_ports(&cap_port, "CLLS-Aligner:input_0");
-        connect_pipewire_ports(&format!("{}:capture_AUX0", interface_clone.replace("alsa_output", "alsa_input")), "CLLS-Aligner:input_1");
-        connect_pipewire_ports(&format!("{}:capture_AUX1", interface_clone.replace("alsa_output", "alsa_input")), "CLLS-Aligner:input_2");
+        connect_pipewire_ports("CLLS-Aligner:output_1", &play_port);
+        connect_pipewire_ports(&cap_port, "CLLS-Aligner:input_1");
+        connect_pipewire_ports(&format!("{}:capture_AUX0", interface_clone.replace("alsa_output", "alsa_input")), "CLLS-Aligner:input_2");
+        connect_pipewire_ports(&format!("{}:capture_AUX1", interface_clone.replace("alsa_output", "alsa_input")), "CLLS-Aligner:input_3");
     });
 
     let window_clone = window.clone();
