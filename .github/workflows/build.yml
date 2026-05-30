@@ -33,7 +33,7 @@ jobs:
 
     - name: Build Wine Guest and Agent Binaries
       run: |
-        wineg++ -O2 -I. guest.cpp -o build/arthur-guest.exe -lpthread
+        wineg++ -O2 -I. archive/guest_legacy.cpp -o build/arthur-guest.exe -lpthread
         wineg++ -O2 -I. -Ivst3_headers win_guest_agent.cpp vstiids.cpp -o build/win_guest_agent.exe -lpthread
         mkdir -p bin
         cp build/arthur-guest.exe bin/
