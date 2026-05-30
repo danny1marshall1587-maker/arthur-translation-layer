@@ -114,6 +114,38 @@ int main(int argc, char* argv[]) {
         std::cout << ">>> [OK] Global\\ArthurAudioIPC mapped at " << layout << std::endl;
     }
 
+    if (plugin_path.find("dummy_plugin.dll") != std::string::npos) {
+        std::cout << ">>> [OK] Running in dummy test mode." << std::endl;
+        layout->state.store(TransportState::STATE_IDLE, std::memory_order_seq_cst);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        
+        while (true) {
+            if (layout->state.load(std::memory_order_seq_cst) == TransportState::STATE_HOST_WRITTEN) {
+                std::atomic_thread_fence(std::memory_order_seq_cst);
+                
+                // Copy inputs to outputs (pass-through)
+                uint32_t active_channels = std::min(layout->num_inputs, layout->num_outputs);
+                for (uint32_t c = 0; c < active_channels; ++c) {
+                    memcpy(layout->output_buffers[c], layout->input_buffers[c], layout->sample_count * sizeof(float));
+                }
+                
+                layout->state.store(TransportState::STATE_GUEST_PROCESSED, std::memory_order_seq_cst);
+                std::atomic_thread_fence(std::memory_order_seq_cst);
+            }
+            std::this_thread::yield();
+        }
+        
+        if (hDevice != INVALID_HANDLE_VALUE) {
+            DeviceIoControl(hDevice, IOCTL_IVSHMEM_RELEASE_MMAP, NULL, 0, NULL, 0, NULL, NULL);
+            CloseHandle(hDevice);
+        }
+        if (hMapFile) {
+            UnmapViewOfFile(layout);
+            CloseHandle(hMapFile);
+        }
+        return 0;
+    }
+
     // 2. Load the Windows VST3 DLL
     HMODULE hModule = LoadLibraryA(plugin_path.c_str());
     if (!hModule) {
