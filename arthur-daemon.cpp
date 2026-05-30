@@ -543,6 +543,54 @@ void handle_client(int client_fd) {
         }
         std::string resp = "UNLOADED";
         send(client_fd, resp.c_str(), resp.length(), 0);
+    } else if (cmd.find("LIST_SHM") == 0) {
+        // Return newline-separated list of all active SHM slot names
+        std::lock_guard<std::mutex> lock(plugins_mutex);
+        std::string resp;
+        for (auto &kv : active_plugins) {
+            resp += kv.first + "\n";
+        }
+        if (resp.empty()) resp = "";
+        send(client_fd, resp.c_str(), resp.length(), 0);
+    } else if (cmd.find("CONSOLE_MODE") == 0) {
+        // CONSOLE_MODE <shm_name> <mode_0_1_2>
+        // Write console_mode field in the shared memory for the named slot
+        std::istringstream ss(cmd);
+        std::string token, shm_name;
+        int mode = 0;
+        ss >> token >> shm_name >> mode;
+        if (shm_name.empty() || mode < 0 || mode > 2) {
+            std::string resp = "ERROR: Bad CONSOLE_MODE args";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+        } else {
+            // Open the SHM and write the mode field
+            std::string full_shm = "/" + shm_name;
+            int fd = shm_open(full_shm.c_str(), O_RDWR, 0600);
+            if (fd < 0) {
+                std::string resp = "ERROR: shm_open failed for " + shm_name;
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            } else {
+                void *ptr = mmap(nullptr, sizeof(arthur::AudioSharedMemory),
+                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                close(fd);
+                if (ptr == MAP_FAILED) {
+                    std::string resp = "ERROR: mmap failed";
+                    send(client_fd, resp.c_str(), resp.length(), 0);
+                } else {
+                    auto *layout = reinterpret_cast<arthur::AudioSharedMemory*>(ptr);
+                    if (layout->version == arthur::AudioSharedMemory::SHM_VERSION) {
+                        layout->console_mode.store(static_cast<uint32_t>(mode),
+                                                   std::memory_order_release);
+                        std::string resp = "OK";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    } else {
+                        std::string resp = "ERROR: SHM version mismatch";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    }
+                    munmap(ptr, sizeof(arthur::AudioSharedMemory));
+                }
+            }
+        }
     } else {
         std::string resp = "ERROR: Unknown command";
         send(client_fd, resp.c_str(), resp.length(), 0);

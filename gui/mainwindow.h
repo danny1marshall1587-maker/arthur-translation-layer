@@ -66,6 +66,7 @@ private slots:
     void showInstaller();
     void showRack();
     void showSettings();
+    void showConsole();
 
     // System Status Updates
     void querySystemStatus();
@@ -123,6 +124,20 @@ private:
     QWidget *m_installerTab;
     QWidget *m_rackTab;
     QWidget *m_settingsTab;
+    QWidget *m_consoleTab;
+
+    // VHC Console Mode: per-channel mode selectors & SHM fds
+    struct ConsoleChannelRow {
+        QLabel *nameLabel = nullptr;
+        QComboBox *modeSelect = nullptr;
+        QLabel *modeBadge = nullptr;
+        QString shmName;
+    };
+    QList<ConsoleChannelRow> m_consoleRows;
+    QWidget *m_consoleChannelContainer = nullptr;
+    QPushButton *m_consoleScanBtn = nullptr;
+    void rebuildConsoleChannels();
+    void applyChannelMode(int rowIdx, int mode);
 
     // Sidebar status
     QLabel *m_statusDot;

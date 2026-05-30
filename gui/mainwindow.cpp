@@ -317,10 +317,17 @@ void MainWindow::initUi() {
     btnSettings->setFixedHeight(36);
     btnSettings->setProperty("class", "navBtn");
 
+    QPushButton *btnConsole = new QPushButton("  VHC Console", m_sidebar);
+    btnConsole->setIcon(QApplication::style()->standardIcon(QStyle::SP_MediaVolume));
+    btnConsole->setCursor(Qt::PointingHandCursor);
+    btnConsole->setFixedHeight(36);
+    btnConsole->setProperty("class", "navBtn");
+
     sidebarLayout->addWidget(btnDashboard);
     sidebarLayout->addWidget(btnInstaller);
     sidebarLayout->addWidget(btnRack);
     sidebarLayout->addWidget(btnSettings);
+    sidebarLayout->addWidget(btnConsole);
     sidebarLayout->addStretch();
 
     // Global Status Dot Indicator (Sidebar Bottom)
@@ -347,38 +354,17 @@ void MainWindow::initUi() {
     mainLayout->addWidget(m_contentArea);
 
     // Connect Navigation Button Clicks to Stack switches
-    connect(btnDashboard, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", true); btnInstaller->setProperty("active", false); btnRack->setProperty("active", false); btnSettings->setProperty("active", false);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showDashboard();
-    });
-    connect(btnInstaller, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", false); btnInstaller->setProperty("active", true); btnRack->setProperty("active", false); btnSettings->setProperty("active", false);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showInstaller();
-    });
-    connect(btnRack, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", false); btnInstaller->setProperty("active", false); btnRack->setProperty("active", true); btnSettings->setProperty("active", false);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showRack();
-    });
-    connect(btnSettings, &QPushButton::clicked, this, [=]() {
-        btnDashboard->setProperty("active", false); btnInstaller->setProperty("active", false); btnRack->setProperty("active", false); btnSettings->setProperty("active", true);
-        btnDashboard->style()->unpolish(btnDashboard); btnDashboard->style()->polish(btnDashboard);
-        btnInstaller->style()->unpolish(btnInstaller); btnInstaller->style()->polish(btnInstaller);
-        btnRack->style()->unpolish(btnRack); btnRack->style()->polish(btnRack);
-        btnSettings->style()->unpolish(btnSettings); btnSettings->style()->polish(btnSettings);
-        showSettings();
-    });
+    auto refreshBtns = [=](QPushButton* active) {
+        for (QPushButton *b : {btnDashboard, btnInstaller, btnRack, btnSettings, btnConsole}) {
+            b->setProperty("active", (b == active));
+            b->style()->unpolish(b); b->style()->polish(b);
+        }
+    };
+    connect(btnDashboard, &QPushButton::clicked, this, [=]() { refreshBtns(btnDashboard); showDashboard(); });
+    connect(btnInstaller, &QPushButton::clicked, this, [=]() { refreshBtns(btnInstaller); showInstaller(); });
+    connect(btnRack,      &QPushButton::clicked, this, [=]() { refreshBtns(btnRack);      showRack();      });
+    connect(btnSettings,  &QPushButton::clicked, this, [=]() { refreshBtns(btnSettings);  showSettings();  });
+    connect(btnConsole,   &QPushButton::clicked, this, [=]() { refreshBtns(btnConsole);   showConsole();   });
 
     // =========================================================================
     // Stack 1: Dashboard Tab
@@ -985,6 +971,78 @@ void MainWindow::initUi() {
     setTabMainLayout->addWidget(m_tuningStatusCard);
 
     m_contentArea->addWidget(m_settingsTab);
+
+    // =========================================================================
+    // Stack 5: VHC Console Tab
+    // =========================================================================
+    m_consoleTab = new QWidget(this);
+    QVBoxLayout *consLayout = new QVBoxLayout(m_consoleTab);
+    consLayout->setSpacing(10);
+    consLayout->setContentsMargins(10, 10, 10, 10);
+
+    QLabel *consTitle = new QLabel("Virtual Hybrid Console (VHC)", m_consoleTab);
+    consTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
+    QLabel *consSub = new QLabel("Set per-channel routing mode. Monitor Mode bypasses effects to record the dry signal while monitoring the wet processed audio.", m_consoleTab);
+    consSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
+    consLayout->addWidget(consTitle);
+    consLayout->addWidget(consSub);
+
+    // Info card explaining the three modes
+    QFrame *modeInfoCard = new QFrame(m_consoleTab);
+    modeInfoCard->setProperty("class", "card");
+    QHBoxLayout *modeInfoLayout = new QHBoxLayout(modeInfoCard);
+    modeInfoLayout->setSpacing(20);
+
+    auto makeModeInfo = [&](const QString &icon, const QString &name, const QString &desc, const QString &color) {
+        QVBoxLayout *l = new QVBoxLayout();
+        l->setSpacing(4);
+        QLabel *ico = new QLabel(icon, modeInfoCard);
+        ico->setAlignment(Qt::AlignCenter);
+        ico->setStyleSheet(QString("font-size: 28px; background-color: %1; border-radius: 8px; padding: 6px;").arg(color));
+        ico->setFixedSize(48, 48);
+        QLabel *nm = new QLabel(name, modeInfoCard);
+        nm->setStyleSheet("font-weight: 700; font-size: 12px;");
+        QLabel *ds = new QLabel(desc, modeInfoCard);
+        ds->setStyleSheet("color: #a0a5b5; font-size: 11px;");
+        ds->setWordWrap(true);
+        l->addWidget(ico, 0, Qt::AlignHCenter);
+        l->addWidget(nm);
+        l->addWidget(ds);
+        return l;
+    };
+    modeInfoLayout->addLayout(makeModeInfo("▶", "Playback (Mode 0)", "Processed wet signal sent to main output. Default mode for normal playback.", "rgba(0,122,255,0.12)"));
+    modeInfoLayout->addLayout(makeModeInfo("⏺", "Dry+Monitor (Mode 1)", "Raw dry input sent to DAW for recording. Wet signal routed to monitor bus so you still hear effects.", "rgba(255,149,0,0.12)"));
+    modeInfoLayout->addLayout(makeModeInfo("⏺", "Record Wet (Mode 2)", "Processed wet signal sent directly to DAW main output for recording. Bakes effects in.", "rgba(255,59,48,0.12)"));
+    consLayout->addWidget(modeInfoCard);
+
+    // Scan Button Header
+    QFrame *scanHeader = new QFrame(m_consoleTab);
+    scanHeader->setProperty("class", "card");
+    QHBoxLayout *scanHeaderLayout = new QHBoxLayout(scanHeader);
+    scanHeaderLayout->setContentsMargins(15, 10, 15, 10);
+    QLabel *scanLabel = new QLabel("Active Channel Slots", scanHeader);
+    scanLabel->setStyleSheet("font-weight: 700; font-size: 14px; color: #ffffff;");
+    m_consoleScanBtn = new QPushButton("Scan SHM Channels", scanHeader);
+    m_consoleScanBtn->setProperty("class", "settings-btn");
+    m_consoleScanBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_consoleScanBtn, &QPushButton::clicked, this, &MainWindow::rebuildConsoleChannels);
+    scanHeaderLayout->addWidget(scanLabel);
+    scanHeaderLayout->addStretch();
+    scanHeaderLayout->addWidget(m_consoleScanBtn);
+    consLayout->addWidget(scanHeader);
+
+    // Scrollable channel container
+    QScrollArea *consScrollArea = new QScrollArea(m_consoleTab);
+    consScrollArea->setWidgetResizable(true);
+    consScrollArea->setFrameShape(QFrame::NoFrame);
+    consScrollArea->setStyleSheet("background-color: transparent;");
+    m_consoleChannelContainer = new QWidget();
+    m_consoleChannelContainer->setStyleSheet("background-color: transparent;");
+    new QVBoxLayout(m_consoleChannelContainer);
+    consScrollArea->setWidget(m_consoleChannelContainer);
+    consLayout->addWidget(consScrollArea, 1);
+
+    m_contentArea->addWidget(m_consoleTab);
 }
 
 void MainWindow::showDashboard() {
@@ -1000,6 +1058,139 @@ void MainWindow::showRack() {
 }
 void MainWindow::showSettings() {
     m_contentArea->setCurrentWidget(m_settingsTab);
+}
+void MainWindow::showConsole() {
+    m_contentArea->setCurrentWidget(m_consoleTab);
+    rebuildConsoleChannels();
+}
+
+// =============================================================================
+// VHC Console Mode - Channel Management
+// =============================================================================
+void MainWindow::rebuildConsoleChannels() {
+    m_consoleRows.clear();
+
+    // Delete all old children in the container layout
+    QLayout *existingLayout = m_consoleChannelContainer->layout();
+    QLayoutItem *item;
+    while ((item = existingLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    // Discover active SHM slots via arthur-daemon
+    QStringList shmNames;
+    QString response = "";
+    QLocalSocket sock;
+    sock.connectToServer("/tmp/arthur-daemon.sock");
+    if (sock.waitForConnected(500)) {
+        sock.write("LIST_SHM\n");
+        sock.flush();
+        sock.waitForReadyRead(1000);
+        response = QString::fromUtf8(sock.readAll()).trimmed();
+        sock.disconnectFromServer();
+    }
+
+    if (!response.isEmpty() && !response.startsWith("ERROR")) {
+        shmNames = response.split('\n', Qt::SkipEmptyParts);
+    }
+
+    // Fallback: scan /dev/shm for ArthurAudioIPC* entries
+    if (shmNames.isEmpty()) {
+        QDir devShm("/dev/shm");
+        for (const QString &entry : devShm.entryList(QStringList() << "ArthurAudioIPC*", QDir::Files)) {
+            shmNames.append(entry);
+        }
+    }
+
+    QVBoxLayout *cl = qobject_cast<QVBoxLayout*>(m_consoleChannelContainer->layout());
+
+    if (shmNames.isEmpty()) {
+        QLabel *emptyLabel = new QLabel("No active Arthur channel slots found.\nLoad a plugin in the DSP Rack or connect your DAW.", m_consoleChannelContainer);
+        emptyLabel->setAlignment(Qt::AlignCenter);
+        emptyLabel->setStyleSheet("color: #a0a5b5; font-size: 13px; margin: 40px;");
+        cl->addWidget(emptyLabel);
+        cl->addStretch();
+        return;
+    }
+
+    // Header row
+    QFrame *hdrRow = new QFrame(m_consoleChannelContainer);
+    hdrRow->setStyleSheet("border-bottom: 1px solid rgba(255,255,255,0.06);");
+    QHBoxLayout *hdrLayout = new QHBoxLayout(hdrRow);
+    hdrLayout->setContentsMargins(12, 4, 12, 4);
+    auto makeHdr = [&](const QString &text, int stretch) {
+        QLabel *l = new QLabel(text, hdrRow);
+        l->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px; letter-spacing: 0.5px;");
+        hdrLayout->addWidget(l, stretch);
+    };
+    makeHdr("CHANNEL", 2);
+    makeHdr("CONSOLE MODE", 3);
+    makeHdr("STATUS", 1);
+    cl->addWidget(hdrRow);
+
+    int rowIdx = 0;
+    for (const QString &shmName : shmNames) {
+        ConsoleChannelRow row;
+        row.shmName = shmName;
+
+        QFrame *rowFrame = new QFrame(m_consoleChannelContainer);
+        rowFrame->setProperty("class", "rack-slot");
+        rowFrame->setFixedHeight(52);
+        QHBoxLayout *rl = new QHBoxLayout(rowFrame);
+        rl->setContentsMargins(12, 0, 12, 0);
+
+        // Channel name
+        row.nameLabel = new QLabel(shmName, rowFrame);
+        row.nameLabel->setStyleSheet("font-weight: 600; font-size: 12px;");
+        rl->addWidget(row.nameLabel, 2);
+
+        // Mode selector
+        row.modeSelect = new QComboBox(rowFrame);
+        row.modeSelect->setProperty("class", "custom-select");
+        row.modeSelect->addItem("▶  Playback (Normal)",          0);
+        row.modeSelect->addItem("⏺  Dry Record + Monitor Wet",    1);
+        row.modeSelect->addItem("⏺  Record Wet (Baked FX)",       2);
+        rl->addWidget(row.modeSelect, 3);
+
+        // Status badge
+        row.modeBadge = new QLabel("Playback", rowFrame);
+        row.modeBadge->setProperty("class", "badge badgeBlue");
+        row.modeBadge->setAlignment(Qt::AlignCenter);
+        row.modeBadge->setFixedWidth(90);
+        rl->addWidget(row.modeBadge, 1);
+
+        int capturedIdx = rowIdx;
+        connect(row.modeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, [=](int idx) {
+            applyChannelMode(capturedIdx, idx);
+        });
+
+        cl->addWidget(rowFrame);
+        m_consoleRows.append(row);
+        ++rowIdx;
+    }
+    cl->addStretch();
+}
+
+void MainWindow::applyChannelMode(int rowIdx, int mode) {
+    if (rowIdx < 0 || rowIdx >= m_consoleRows.size()) return;
+    ConsoleChannelRow &row = m_consoleRows[rowIdx];
+
+    // Write console_mode to the SHM segment for this channel
+    QString shmPath = "/dev/shm/" + row.shmName;
+    // Use daemon command for safety - daemon validates and writes the SHM field
+    QString cmd = QString("CONSOLE_MODE %1 %2").arg(row.shmName).arg(mode);
+    sendDaemonCommand(cmd);
+
+    // Update the badge
+    static const QStringList badgeTexts = {"Playback", "Dry+Monitor", "Rec Wet"};
+    static const QStringList badgeClasses = {"badge badgeBlue", "badge badgeGreen", "badge badgeGray"};
+    if (row.modeBadge && mode >= 0 && mode <= 2) {
+        row.modeBadge->setText(badgeTexts[mode]);
+        row.modeBadge->setProperty("class", badgeClasses[mode]);
+        row.modeBadge->style()->unpolish(row.modeBadge);
+        row.modeBadge->style()->polish(row.modeBadge);
+    }
 }
 
 // =============================================================================
