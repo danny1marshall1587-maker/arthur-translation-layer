@@ -41,19 +41,19 @@ struct ShmMidiEvent {
  * The actual memory layout for Shared Memory.
  */
 struct AudioSharedMemory {
-    alignas(64) std::atomic<TransportState> state;
-    uint32_t sample_count;
-    uint32_t num_inputs;
-    uint32_t num_outputs;
-    double sample_rate;
-    int64_t playhead_pos;
+    alignas(64) volatile std::atomic<TransportState> state;
+    volatile uint32_t sample_count;
+    volatile uint32_t num_inputs;
+    volatile uint32_t num_outputs;
+    volatile double sample_rate;
+    volatile int64_t playhead_pos;
 
     float input_buffers[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
     float output_buffers[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
 
-    uint32_t midi_in_count;
+    volatile uint32_t midi_in_count;
     ShmMidiEvent midi_in[256];
-    uint32_t midi_out_count;
+    volatile uint32_t midi_out_count;
     ShmMidiEvent midi_out[256];
 };
 

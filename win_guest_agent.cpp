@@ -87,11 +87,20 @@ int main(int argc, char* argv[]) {
         }
     } else {
         // Named Shared Memory Mode (Wine / local testing fallback)
-        std::cout << ">>> Local/Wine mode: Opening Named File Mapping " << shm_path << std::endl;
-        hMapFile = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, shm_path.c_str());
+        std::cout << ">>> Local/Wine mode: Opening /dev/shm/ArthurAudioIPC via Wine Z: drive mapping..." << std::endl;
+        HANDLE hFile = CreateFileA("Z:\\dev\\shm\\ArthurAudioIPC", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            hFile = CreateFileA("\\??\\unix\\dev\\shm\\ArthurAudioIPC", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        }
+        if (hFile == INVALID_HANDLE_VALUE) {
+            std::cerr << "[ERROR] Could not open /dev/shm/ArthurAudioIPC (Error: " << GetLastError() << ")" << std::endl;
+            return 1;
+        }
+
+        hMapFile = CreateFileMappingA(hFile, NULL, PAGE_READWRITE, 0, 0, "Global\\ArthurAudioIPC");
         if (hMapFile == NULL) {
-            std::cerr << "[ERROR] Failed to open shared memory mapping: " << GetLastError() << std::endl;
-            std::cerr << "Ensure the host process has created the shared memory file first." << std::endl;
+            std::cerr << "[ERROR] CreateFileMappingA failed: " << GetLastError() << std::endl;
+            CloseHandle(hFile);
             return 1;
         }
 
@@ -99,9 +108,10 @@ int main(int argc, char* argv[]) {
         if (!layout) {
             std::cerr << "[ERROR] MapViewOfFile failed: " << GetLastError() << std::endl;
             CloseHandle(hMapFile);
+            CloseHandle(hFile);
             return 1;
         }
-        std::cout << ">>> [OK] Named shared memory mapped at " << layout << std::endl;
+        std::cout << ">>> [OK] Global\\ArthurAudioIPC mapped at " << layout << std::endl;
     }
 
     // 2. Load the Windows VST3 DLL
@@ -244,12 +254,14 @@ int main(int argc, char* argv[]) {
     std::cout << ">>> [OK] Plugin fully activated. Entering Real-Time Processing Loop." << std::endl;
 
     // Reset layout state to IDLE
-    layout->state.store(TransportState::STATE_IDLE, std::memory_order_release);
+    layout->state.store(TransportState::STATE_IDLE, std::memory_order_seq_cst);
+    std::atomic_thread_fence(std::memory_order_seq_cst);
 
     // 7. Real-Time IPC processing loop
     while (true) {
         // Spin lock waiting for the host to write the next buffer
-        if (layout->state.load(std::memory_order_acquire) == TransportState::STATE_HOST_WRITTEN) {
+        if (layout->state.load(std::memory_order_seq_cst) == TransportState::STATE_HOST_WRITTEN) {
+            std::atomic_thread_fence(std::memory_order_seq_cst);
             
             // Set up ProcessData buffers
             ProcessData processData;
@@ -301,7 +313,8 @@ int main(int argc, char* argv[]) {
             audioProcessor->process(processData);
 
             // Notify Host
-            layout->state.store(TransportState::STATE_GUEST_PROCESSED, std::memory_order_release);
+            layout->state.store(TransportState::STATE_GUEST_PROCESSED, std::memory_order_seq_cst);
+            std::atomic_thread_fence(std::memory_order_seq_cst);
         }
 
         // Relinquish remaining CPU slice to prevent 100% spinlock core saturation

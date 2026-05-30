@@ -10,6 +10,9 @@
 #include <wait.h>
 #include <filesystem>
 #include <memory>
+#include <thread>
+#include <chrono>
+#include <mutex>
 #include "AudioIPC.h"
 
 namespace fs = std::filesystem;
@@ -26,6 +29,7 @@ struct PluginInstance {
 };
 
 std::map<std::string, PluginInstance> active_plugins;
+std::mutex plugins_mutex;
 
 // Helper to find the actual .vst3 file for a plugin name
 std::string find_windows_plugin(const std::string& name) {
@@ -65,11 +69,181 @@ std::string find_windows_plugin(const std::string& name) {
 }
 
 void handle_signal(int sig) {
+    std::lock_guard<std::mutex> lock(plugins_mutex);
     for (auto const& [name, instance] : active_plugins) {
         kill(instance.guest_pid, SIGTERM);
     }
     unlink(SOCKET_PATH);
     exit(0);
+}
+
+void handle_client(int client_fd) {
+    char buffer[1024];
+    int bytes = recv(client_fd, buffer, sizeof(buffer)-1, 0);
+    if (bytes <= 0) {
+        close(client_fd);
+        return;
+    }
+
+    buffer[bytes] = '\0';
+    std::string cmd(buffer);
+    std::cout << "[DAEMON] Received command: " << cmd << std::endl;
+
+    if (cmd.find("LOAD") == 0 || cmd.find("GET_SHM") == 0) {
+        std::string plugin_name = "";
+        bool is_preloaded = false;
+        if (cmd.find("LOAD") == 0) {
+            size_t first_space = cmd.find(' ');
+            size_t second_space = cmd.find(' ', first_space + 1);
+            std::string shm_name = cmd.substr(first_space + 1, second_space - first_space - 1);
+            plugin_name = cmd.substr(second_space + 1);
+            is_preloaded = (shm_name.find("_slot_") != std::string::npos);
+        } else {
+            size_t first_space = cmd.find(' ');
+            plugin_name = cmd.substr(first_space + 1);
+            is_preloaded = false;
+        }
+
+        std::string target_shm = "ArthurAudioIPC";
+
+        // Check if plugin is already running
+        {
+            std::lock_guard<std::mutex> lock(plugins_mutex);
+            if (active_plugins.find(target_shm) != active_plugins.end()) {
+                std::cout << ">>> Guest for " << plugin_name << " is already running. Reusing." << std::endl;
+                active_plugins[target_shm].is_assigned = true;
+                std::string resp = "SHM " + target_shm;
+                send(client_fd, resp.c_str(), resp.length(), 0);
+                close(client_fd);
+                return;
+            }
+        }
+
+        std::string win_plugin_path = find_windows_plugin(plugin_name);
+        if (win_plugin_path.empty()) {
+            std::cerr << "[ERROR] Could not find Windows plugin: " << plugin_name << std::endl;
+            std::string resp = "ERROR: Plugin not found";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+            close(client_fd);
+            return;
+        }
+
+        std::cout << ">>> Creating shared memory: /dev/shm/" << target_shm << std::endl;
+        auto transport = std::make_shared<arthur::AudioTransport>();
+        if (!transport->create(target_shm)) {
+            std::cerr << "[ERROR] Daemon failed to create shared memory: " << target_shm << std::endl;
+            std::string resp = "ERROR: Failed to create SHM";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+            close(client_fd);
+            return;
+        }
+
+        // Initialize state to STATE_ERROR to indicate not-yet-ready
+        transport->get()->state.store(arthur::TransportState::STATE_ERROR, std::memory_order_seq_cst);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+
+        std::cout << ">>> Spawning guest for: " << plugin_name << std::endl;
+        pid_t pid = fork();
+        if (pid == 0) {
+            std::string self_dir = ".";
+            try {
+                self_dir = fs::canonical("/proc/self/exe").parent_path().string();
+            } catch (...) {}
+
+            std::string guest_bin = self_dir + "/arthur-guest.exe";
+            if (access("/app/bin/arthur-guest.exe", F_OK) == 0) {
+                guest_bin = "/app/bin/arthur-guest.exe";
+            }
+            std::string real_guest_bin = self_dir + "/win_guest_agent.exe";
+            if (access("/app/bin/win_guest_agent.exe", F_OK) == 0) {
+                real_guest_bin = "/app/bin/win_guest_agent.exe";
+            }
+            
+            std::string run_bin = real_guest_bin;
+            if (access(run_bin.c_str(), F_OK) != 0) {
+                run_bin = guest_bin;
+            }
+
+            execlp("wine", "wine", run_bin.c_str(), target_shm.c_str(), win_plugin_path.c_str(), NULL);
+            exit(1);
+        } else if (pid > 0) {
+            // Watchdog loop for handshake connection
+            auto start_time = std::chrono::steady_clock::now();
+            bool connected = false;
+
+            while (true) {
+                if (transport->get()->state.load(std::memory_order_seq_cst) == arthur::TransportState::STATE_IDLE) {
+                    connected = true;
+                    break;
+                }
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start_time
+                ).count();
+                if (elapsed >= 5000) {
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            if (!connected) {
+                std::cerr << "ERROR: Shared Memory IPC Connection Timeout" << std::endl;
+                kill(pid, SIGTERM);
+                int status;
+                waitpid(pid, &status, WNOHANG);
+                transport->detach();
+
+                std::string resp = "ERROR: Shared Memory IPC Connection Timeout";
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            } else {
+                std::cout << ">>> [OK] Handshake completed successfully." << std::endl;
+                {
+                    std::lock_guard<std::mutex> lock(plugins_mutex);
+                    active_plugins[target_shm] = {pid, target_shm, plugin_name, is_preloaded, true, transport};
+                }
+                std::string resp = "SHM " + target_shm;
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            }
+        } else {
+            std::cerr << "[ERROR] Failed to fork guest process" << std::endl;
+            std::string resp = "ERROR: Fork failed";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+        }
+    } else if (cmd.find("RELEASE") == 0) {
+        size_t first_space = cmd.find(' ');
+        std::string shm_name = cmd.substr(first_space + 1);
+        std::string target_shm = "ArthurAudioIPC";
+
+        std::lock_guard<std::mutex> lock(plugins_mutex);
+        auto it = active_plugins.find(target_shm);
+        if (it != active_plugins.end()) {
+            if (it->second.is_preloaded) {
+                std::cout << ">>> Releasing preloaded instance back to standby: " << target_shm << std::endl;
+                it->second.is_assigned = false;
+            } else {
+                std::cout << ">>> Tearing down dynamic instance: " << target_shm << std::endl;
+                kill(it->second.guest_pid, SIGTERM);
+                active_plugins.erase(it);
+            }
+        }
+        std::string resp = "RELEASED";
+        send(client_fd, resp.c_str(), resp.length(), 0);
+    } else if (cmd.find("UNLOAD") == 0) {
+        size_t first_space = cmd.find(' ');
+        std::string shm_name = cmd.substr(first_space + 1);
+        std::string target_shm = "ArthurAudioIPC";
+
+        std::lock_guard<std::mutex> lock(plugins_mutex);
+        auto it = active_plugins.find(target_shm);
+        if (it != active_plugins.end()) {
+            std::cout << ">>> Killing Guest for SHM: " << target_shm << std::endl;
+            kill(it->second.guest_pid, SIGTERM);
+            active_plugins.erase(it);
+        }
+        std::string resp = "UNLOADED";
+        send(client_fd, resp.c_str(), resp.length(), 0);
+    }
+
+    close(client_fd);
 }
 
 int main() {
@@ -94,165 +268,12 @@ int main() {
         int client_fd = accept(server_fd, NULL, NULL);
         if (client_fd == -1) continue;
 
-        char buffer[1024];
-        int bytes = recv(client_fd, buffer, sizeof(buffer)-1, 0);
-        if (bytes > 0) {
-            buffer[bytes] = '\0';
-            std::string cmd(buffer);
-            
-            if (cmd.find("LOAD") == 0) {
-                size_t first_space = cmd.find(' ');
-                size_t second_space = cmd.find(' ', first_space + 1);
-                std::string shm_name = cmd.substr(first_space + 1, second_space - first_space - 1);
-                std::string plugin_name = cmd.substr(second_space + 1);
+        // Process client connection asynchronously in a background thread
+        std::thread([client_fd]() {
+            handle_client(client_fd);
+        }).detach();
 
-                bool is_preloaded = (shm_name.find("_slot_") != std::string::npos);
-
-                // If already running (preloaded), update its status and skip spawn
-                if (active_plugins.find(shm_name) != active_plugins.end()) {
-                    std::cout << ">>> Guest for " << plugin_name << " on " << shm_name << " is already running. Updating status." << std::endl;
-                    active_plugins[shm_name].is_preloaded = is_preloaded;
-                    close(client_fd);
-                    continue;
-                }
-
-                std::string win_plugin_path = find_windows_plugin(plugin_name);
-                if (win_plugin_path.empty()) {
-                    std::cerr << "[ERROR] Could not find Windows plugin: " << plugin_name << std::endl;
-                } else {
-                    std::cout << ">>> Spawning Guest for: " << plugin_name << " on SHM: " << shm_name << std::endl;
-
-                    // Create the shared memory transport first so guest can open it
-                    auto transport = std::make_shared<arthur::AudioTransport>();
-                    if (!transport->create(shm_name)) {
-                        std::cerr << "[ERROR] Daemon failed to create shared memory: " << shm_name << std::endl;
-                    }
-
-                    pid_t pid = fork();
-                    if (pid == 0) {
-                        std::string self_dir = ".";
-                        try {
-                            self_dir = fs::canonical("/proc/self/exe").parent_path().string();
-                        } catch (...) {}
-
-                        std::string guest_bin = self_dir + "/arthur-guest.exe";
-                        if (access("/app/bin/arthur-guest.exe", F_OK) == 0) {
-                            guest_bin = "/app/bin/arthur-guest.exe";
-                        }
-                        std::string real_guest_bin = self_dir + "/win_guest_agent.exe";
-                        if (access("/app/bin/win_guest_agent.exe", F_OK) == 0) {
-                            real_guest_bin = "/app/bin/win_guest_agent.exe";
-                        }
-                        
-                        std::string run_bin = real_guest_bin;
-                        if (access(run_bin.c_str(), F_OK) != 0) {
-                            run_bin = guest_bin;
-                        }
-
-                        execlp("wine", "wine", run_bin.c_str(), shm_name.c_str(), win_plugin_path.c_str(), NULL);
-                        exit(1);
-                    } else {
-                        active_plugins[shm_name] = {pid, shm_name, plugin_name, is_preloaded, false, transport};
-                    }
-                }
-            } else if (cmd.find("GET_SHM") == 0) {
-                size_t first_space = cmd.find(' ');
-                std::string plugin_name = cmd.substr(first_space + 1);
-
-                // Look for an unassigned preloaded instance of this plugin
-                std::string target_shm = "";
-                for (auto& [shm, inst] : active_plugins) {
-                    if (inst.plugin_name == plugin_name && inst.is_preloaded && !inst.is_assigned) {
-                        inst.is_assigned = true;
-                        target_shm = shm;
-                        std::cout << ">>> Auto-assigning preloaded instance: " << shm << " to DAW bridge." << std::endl;
-                        break;
-                    }
-                }
-
-                if (target_shm.empty()) {
-                    // No preloaded instance available. Spawn a new dynamic one!
-                    static int dynamic_counter = 0;
-                    target_shm = "arthur_" + plugin_name + "_dyn_" + std::to_string(++dynamic_counter);
-
-                    std::string win_plugin_path = find_windows_plugin(plugin_name);
-                    if (win_plugin_path.empty()) {
-                        std::cerr << "[ERROR] Could not find Windows plugin for dynamic loading: " << plugin_name << std::endl;
-                        std::string resp = "ERROR";
-                        send(client_fd, resp.c_str(), resp.length(), 0);
-                        close(client_fd);
-                        continue;
-                    }
-
-                    auto transport = std::make_shared<arthur::AudioTransport>();
-                    if (!transport->create(target_shm)) {
-                        std::cerr << "[ERROR] Daemon failed to create dynamic shared memory: " << target_shm << std::endl;
-                        std::string resp = "ERROR";
-                        send(client_fd, resp.c_str(), resp.length(), 0);
-                        close(client_fd);
-                        continue;
-                    }
-
-                    pid_t pid = fork();
-                    if (pid == 0) {
-                        std::string self_dir = ".";
-                        try {
-                            self_dir = fs::canonical("/proc/self/exe").parent_path().string();
-                        } catch (...) {}
-
-                        std::string guest_bin = self_dir + "/arthur-guest.exe";
-                        if (access("/app/bin/arthur-guest.exe", F_OK) == 0) {
-                            guest_bin = "/app/bin/arthur-guest.exe";
-                        }
-                        std::string real_guest_bin = self_dir + "/win_guest_agent.exe";
-                        if (access("/app/bin/win_guest_agent.exe", F_OK) == 0) {
-                            real_guest_bin = "/app/bin/win_guest_agent.exe";
-                        }
-                        
-                        std::string run_bin = real_guest_bin;
-                        if (access(run_bin.c_str(), F_OK) != 0) {
-                            run_bin = guest_bin;
-                        }
-
-                        execlp("wine", "wine", run_bin.c_str(), target_shm.c_str(), win_plugin_path.c_str(), NULL);
-                        exit(1);
-                    } else {
-                        active_plugins[target_shm] = {pid, target_shm, plugin_name, false, true, transport};
-                        std::cout << ">>> Spawned dynamic guest for " << plugin_name << " on SHM: " << target_shm << std::endl;
-                    }
-                }
-
-                // Send the SHM name back to the client
-                std::string resp = "SHM " + target_shm;
-                send(client_fd, resp.c_str(), resp.length(), 0);
-            } else if (cmd.find("RELEASE") == 0) {
-                size_t first_space = cmd.find(' ');
-                std::string shm_name = cmd.substr(first_space + 1);
-
-                auto it = active_plugins.find(shm_name);
-                if (it != active_plugins.end()) {
-                    if (it->second.is_preloaded) {
-                        std::cout << ">>> Releasing preloaded instance back to standby: " << shm_name << std::endl;
-                        it->second.is_assigned = false;
-                    } else {
-                        std::cout << ">>> Tearing down dynamic instance: " << shm_name << std::endl;
-                        kill(it->second.guest_pid, SIGTERM);
-                        active_plugins.erase(it);
-                    }
-                }
-            } else if (cmd.find("UNLOAD") == 0) {
-                size_t first_space = cmd.find(' ');
-                std::string shm_name = cmd.substr(first_space + 1);
-                
-                auto it = active_plugins.find(shm_name);
-                if (it != active_plugins.end()) {
-                    std::cout << ">>> Killing Guest for SHM: " << shm_name << std::endl;
-                    kill(it->second.guest_pid, SIGTERM);
-                    active_plugins.erase(it);
-                }
-            }
-        }
-        close(client_fd);
+        // Clean up zombie processes
         int status;
         while (waitpid(-1, &status, WNOHANG) > 0);
     }

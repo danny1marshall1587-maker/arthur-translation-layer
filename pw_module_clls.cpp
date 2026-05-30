@@ -264,7 +264,12 @@ int main(int argc, char *argv[]) {
     }
 
     const char *filter_name = (argc > 1) ? argv[1] : "CLLS-Aligner";
-    data.filter = pw_filter_new(core, filter_name, NULL);
+    struct pw_properties *props = pw_properties_new(
+        PW_KEY_NODE_NAME, filter_name,
+        PW_KEY_NODE_DESCRIPTION, "Closed Loop Latency Sync Aligner",
+        NULL
+    );
+    data.filter = pw_filter_new(core, filter_name, props);
     if (!data.filter) {
         std::cerr << "Failed to create PipeWire filter client!" << std::endl;
         pw_core_disconnect(core);

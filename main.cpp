@@ -136,11 +136,13 @@ public:
         }
 
         // Trigger Guest
-        layout->state.store(arthur::TransportState::STATE_HOST_WRITTEN, std::memory_order_release);
+        layout->state.store(arthur::TransportState::STATE_HOST_WRITTEN, std::memory_order_seq_cst);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
         
         // Busy wait for Guest (with timeout)
         int timeout = 100000;
-        while (layout->state.load(std::memory_order_acquire) != arthur::TransportState::STATE_GUEST_PROCESSED && --timeout > 0) {
+        while (layout->state.load(std::memory_order_seq_cst) != arthur::TransportState::STATE_GUEST_PROCESSED && --timeout > 0) {
+            std::atomic_thread_fence(std::memory_order_seq_cst);
             #if defined(__x86_64__) || defined(_M_X64)
             asm volatile("pause" ::: "memory");
             #endif
@@ -148,7 +150,8 @@ public:
 
         if (timeout == 0) {
             // Guest timed out, bypass processing to avoid crash
-            layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_release);
+            layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_seq_cst);
+            std::atomic_thread_fence(std::memory_order_seq_cst);
             return kResultOk;
         }
 
@@ -161,7 +164,8 @@ public:
         }
 
         // Release control back to IDLE
-        layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_release);
+        layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_seq_cst);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         return kResultOk;
     }

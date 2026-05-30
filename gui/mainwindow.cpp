@@ -1492,8 +1492,8 @@ void MainWindow::startCllsCalibration(int slotIdx) {
         }
 
         if (code1 == 0 && code2 == 0) {
-            slot.statusBadge->setText("Linked");
-            slot.statusBadge->setStyleSheet("background-color: rgba(48,209,88,0.15); color: #30d158; border: 1px solid rgba(48,209,88,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+            slot.statusBadge->setText("Awaiting Loopback");
+            slot.statusBadge->setStyleSheet("background-color: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
         } else {
             slot.statusBadge->setText("Link Error");
             slot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
@@ -1519,6 +1519,9 @@ void MainWindow::readCllsOutput(int slotIdx) {
                 float rttSamples = rttMatch.captured(1).toFloat();
                 float rttMs = rttSamples / (m_activeSampleRate / 1000.0f);
                 slot.rttValLabel->setText(QString("%1 smp").arg(rttSamples, 0, 'f', 1));
+                
+                slot.statusBadge->setText("Linked");
+                slot.statusBadge->setStyleSheet("background-color: rgba(48,209,88,0.15); color: #30d158; border: 1px solid rgba(48,209,88,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
 
                 if (slotIdx == 0) {
                     if (m_cllsRttVal) m_cllsRttVal->setText(QString("%1 ms (%2 samples)").arg(rttMs, 0, 'f', 3).arg(rttSamples, 0, 'f', 1));
