@@ -68,6 +68,9 @@ target_link_libraries(midi_sync PRIVATE ${ALSA_LIBRARIES} rt pthread)
 add_executable(arthur_stress_test ArthurStressTest.cpp)
 target_link_libraries(arthur_stress_test PRIVATE rt pthread)
 
+enable_testing()
+add_test(NAME AcousticStressTest COMMAND arthur_stress_test)
+
 # --- Installation rules ---
 if(BUILD_GUI)
     install(TARGETS arthur-control-center RUNTIME DESTINATION bin)

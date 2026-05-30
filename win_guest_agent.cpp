@@ -14,10 +14,12 @@
 
 #include "AudioIPC.h"
 
+bool g_cores_isolated = false;
+
 void pin_to_isolated_cores() {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    bool set_any = false;
+    std::vector<int> cores;
 
     // Try to read isolated CPU cores from Linux sysfs
     std::ifstream infile("/sys/devices/system/cpu/isolated");
@@ -33,33 +35,42 @@ void pin_to_isolated_cores() {
                     int start = std::stoi(token.substr(0, dash));
                     int end = std::stoi(token.substr(dash + 1));
                     for (int cpu = start; cpu <= end; ++cpu) {
-                        CPU_SET(cpu, &cpuset);
-                        set_any = true;
+                        cores.push_back(cpu);
                     }
                 } catch (...) {}
             } else {
                 // Single core like "4"
                 try {
                     int cpu = std::stoi(token);
-                    CPU_SET(cpu, &cpuset);
-                    set_any = true;
+                    cores.push_back(cpu);
                 } catch (...) {}
             }
         }
     }
 
     // Fallback to default cores 4-7 if no isolated cores were parsed
-    if (!set_any) {
+    if (cores.empty()) {
         std::cout << ">>> No isolated cores found in sysfs. Falling back to default cores 4-7." << std::endl;
         for (int cpu = 4; cpu <= 7; ++cpu) {
-            CPU_SET(cpu, &cpuset);
+            cores.push_back(cpu);
         }
     }
 
+    // Select the second isolated core if available, else first
+    int target_cpu = 5;
+    if (cores.size() >= 2) {
+        target_cpu = cores[1];
+    } else if (cores.size() == 1) {
+        target_cpu = cores[0];
+    }
+
+    CPU_SET(target_cpu, &cpuset);
+    g_cores_isolated = true;
+
     if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
-        std::cout << ">>> [OK] Thread CPU affinity successfully set." << std::endl;
+        std::cout << ">>> [OK] Thread CPU affinity successfully set to core " << target_cpu << "." << std::endl;
     } else {
-        std::cerr << "[WARNING] Failed to set CPU affinity: " << strerror(errno) << std::endl;
+        std::cerr << "[WARNING] Failed to set CPU affinity to core " << target_cpu << ": " << strerror(errno) << std::endl;
     }
 }
 #include <pluginterfaces/base/ipluginbase.h>
@@ -193,19 +204,22 @@ int main(int argc, char* argv[]) {
                 }
                 
                 // Safe synthetic dummy mathematical calculation cycles to fill the window
-                double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
-                double target_us = ((double)layout->sample_count * 1000000.0) / sr;
-                volatile float dummy = 0.0f;
-                while (true) {
-                    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                        std::chrono::high_resolution_clock::now() - start_time
-                    ).count();
-                    if (elapsed_us >= target_us) {
-                        break;
-                    }
-                    dummy = dummy * 1.000001f + 0.000001f;
-                    if (dummy > 10.0f) {
-                        dummy = 0.0f;
+                if (g_cores_isolated) {
+                    double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
+                    double target_us = ((double)layout->sample_count * 1000000.0) / sr;
+                    double padding_target_us = target_us > 50.0 ? target_us - 50.0 : target_us * 0.8;
+                    volatile float dummy = 0.0f;
+                    while (true) {
+                        auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::high_resolution_clock::now() - start_time
+                        ).count();
+                        if (elapsed_us >= padding_target_us) {
+                            break;
+                        }
+                        dummy = dummy * 1.000001f + 0.000001f;
+                        if (dummy > 10.0f) {
+                            dummy = 0.0f;
+                        }
                     }
                 }
 
@@ -434,19 +448,22 @@ int main(int argc, char* argv[]) {
             audioProcessor->process(processData);
 
             // Safe synthetic dummy mathematical calculation cycles to fill the window
-            double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
-            double target_us = ((double)layout->sample_count * 1000000.0) / sr;
-            volatile float dummy = 0.0f;
-            while (true) {
-                auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::high_resolution_clock::now() - start_time
-                ).count();
-                if (elapsed_us >= target_us) {
-                    break;
-                }
-                dummy = dummy * 1.000001f + 0.000001f;
-                if (dummy > 10.0f) {
-                    dummy = 0.0f;
+            if (g_cores_isolated) {
+                double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
+                double target_us = ((double)layout->sample_count * 1000000.0) / sr;
+                double padding_target_us = target_us > 50.0 ? target_us - 50.0 : target_us * 0.8;
+                volatile float dummy = 0.0f;
+                while (true) {
+                    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::high_resolution_clock::now() - start_time
+                    ).count();
+                    if (elapsed_us >= padding_target_us) {
+                        break;
+                    }
+                    dummy = dummy * 1.000001f + 0.000001f;
+                    if (dummy > 10.0f) {
+                        dummy = 0.0f;
+                    }
                 }
             }
 

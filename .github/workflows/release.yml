@@ -57,6 +57,14 @@ jobs:
           cp build/win_guest_agent.exe bin/
           cp build/win_guest_agent.exe.so bin/
 
+      - name: Run Arthur Closed-Loop Stress Test
+        run: |
+          rm -f /tmp/arthur.sock
+          ./build/arthur-daemon &
+          sleep 2
+          ./build/arthur_stress_test
+          killall -9 arthur-daemon wine wineserver || true
+
       - name: Package Flatpak Bundle
         run: |
           # Clean CMake cache to prevent directory mismatch errors inside Flatpak sandbox

@@ -18,7 +18,7 @@ jobs:
     - name: Install Build Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk libasound2-dev libpipewire-0.3-dev libspa-0.2-dev
+        sudo apt-get install -y build-essential cmake libwayland-dev wayland-protocols pkg-config python3-tk libasound2-dev libpipewire-0.3-dev libspa-0.2-dev libwine-dev wine
 
     - name: Download VST3 Headers
       run: |
@@ -30,6 +30,22 @@ jobs:
       run: |
         cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=OFF
         cmake --build build --config Release -j$(nproc)
+
+    - name: Build Wine Guest and Agent Binaries
+      run: |
+        wineg++ -O2 -I. guest.cpp -o build/arthur-guest.exe -lpthread
+        wineg++ -O2 -I. -Ivst3_headers win_guest_agent.cpp vstiids.cpp -o build/win_guest_agent.exe -lpthread
+        mkdir -p bin
+        cp build/arthur-guest.exe bin/
+        cp build/win_guest_agent.exe bin/
+
+    - name: Run Arthur Closed-Loop Stress Test
+      run: |
+        rm -f /tmp/arthur.sock
+        ./build/arthur-daemon &
+        sleep 2
+        ./build/arthur_stress_test
+        killall -9 arthur-daemon wine wineserver || true
 
     - name: Setup AppDir (Standalone Arthur)
       run: |

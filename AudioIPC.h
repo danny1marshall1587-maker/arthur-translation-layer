@@ -51,6 +51,12 @@ struct AudioSharedMemory {
     float input_buffers[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
     float output_buffers[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
 
+    // Hybrid playback pre-rendered buffer (for ASIO-Guard style)
+    float pre_rendered_playback[SHM_MAX_CHANNELS][SHM_MAX_SAMPLES];
+    volatile std::atomic<uint64_t> playback_ring_start_time_ns;
+    volatile std::atomic<int64_t> playback_ring_start_pos;
+    volatile std::atomic<uint32_t> playback_ring_write_len;
+
     volatile uint32_t midi_in_count;
     ShmMidiEvent midi_in[256];
     volatile uint32_t midi_out_count;
@@ -130,6 +136,63 @@ private:
     std::string name_;
     bool is_owner_;
 };
+#endif
+
+#ifndef _WIN32
+#include <pthread.h>
+#include <time.h>
+
+inline uint64_t get_monotonic_time_ns() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
+inline void write_pre_rendered_playback(AudioSharedMemory* layout, uint32_t channel, uint32_t offset, const float* data, uint32_t count, uint64_t block_start_time_ns, int64_t block_start_pos) {
+    if (channel >= SHM_MAX_CHANNELS) return;
+    
+    uint32_t target_idx = offset % SHM_MAX_SAMPLES;
+    for (uint32_t i = 0; i < count; ++i) {
+        layout->pre_rendered_playback[channel][(target_idx + i) % SHM_MAX_SAMPLES] = data[i];
+    }
+    
+    if (offset == 0) {
+        layout->playback_ring_start_time_ns.store(block_start_time_ns, std::memory_order_release);
+        layout->playback_ring_start_pos.store(block_start_pos, std::memory_order_release);
+        layout->playback_ring_write_len.store(count, std::memory_order_release);
+    } else {
+        uint32_t current_len = layout->playback_ring_write_len.load(std::memory_order_acquire);
+        layout->playback_ring_write_len.store(current_len + count, std::memory_order_release);
+    }
+}
+
+inline void sum_aligned_playback(AudioSharedMemory* layout, uint32_t channel, float* output_buffer, uint32_t count, uint64_t realtime_now_ns, int64_t realtime_pos) {
+    if (channel >= SHM_MAX_CHANNELS) return;
+    
+    uint64_t play_start_ns = layout->playback_ring_start_time_ns.load(std::memory_order_acquire);
+    int64_t play_start_pos = layout->playback_ring_start_pos.load(std::memory_order_acquire);
+    uint32_t write_len = layout->playback_ring_write_len.load(std::memory_order_acquire);
+    double sr = layout->sample_rate > 0.0 ? layout->sample_rate : 48000.0;
+
+    for (uint32_t s = 0; s < count; ++s) {
+        int64_t idx = -1;
+        
+        if (play_start_pos >= 0 && realtime_pos >= 0) {
+            idx = (realtime_pos + s) - play_start_pos;
+        }
+        
+        if ((idx < 0 || idx >= (int64_t)write_len) && play_start_ns != 0) {
+            uint64_t sample_time_ns = realtime_now_ns + (uint64_t)(s * (1000000000.0 / sr));
+            if (sample_time_ns >= play_start_ns) {
+                idx = (int64_t)(((sample_time_ns - play_start_ns) * sr) / 1000000000.0);
+            }
+        }
+
+        if (idx >= 0 && idx < (int64_t)write_len && idx < SHM_MAX_SAMPLES) {
+            output_buffer[s] += layout->pre_rendered_playback[channel][idx % SHM_MAX_SAMPLES];
+        }
+    }
+}
 #endif
 
 } // namespace arthur
