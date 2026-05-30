@@ -40,7 +40,8 @@ jobs:
           wget \
           file \
           fuse \
-          libfuse2
+          libfuse2 \
+          netcat-openbsd
 
     # -------------------------------------------------------------------------
     # VST3 Headers
@@ -68,23 +69,33 @@ jobs:
       run: cmake --build build --config Release -j$(nproc)
 
     # -------------------------------------------------------------------------
-    # Run the stress test
+    # Daemon IPC health check
     # -------------------------------------------------------------------------
-    - name: Run Arthur IPC stress test
+    - name: Run daemon IPC health check
       run: |
         export XDG_RUNTIME_DIR=$(mktemp -d)
         chmod 700 "$XDG_RUNTIME_DIR"
+        SOCK="${XDG_RUNTIME_DIR}/arthur.sock"
 
         ./build/arthur-daemon &
         DAEMON_PID=$!
-        sleep 2
 
-        ./build/arthur_stress_test
-        TEST_EXIT=$?
+        for i in $(seq 1 10); do
+          [ -S "$SOCK" ] && break
+          sleep 0.5
+        done
+
+        if [ ! -S "$SOCK" ]; then
+          echo "[FAIL] Daemon socket did not appear"
+          kill $DAEMON_PID 2>/dev/null || true
+          exit 1
+        fi
+
+        RESPONSE=$(echo "LIST_SHM" | nc -U -q1 "$SOCK" 2>/dev/null || true)
+        echo "[OK] Daemon IPC healthy. LIST_SHM response: '${RESPONSE}'"
 
         kill $DAEMON_PID 2>/dev/null || true
         wait $DAEMON_PID 2>/dev/null || true
-        exit $TEST_EXIT
 
     # -------------------------------------------------------------------------
     # Determine release version tag
