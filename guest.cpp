@@ -6,6 +6,10 @@
   #include <sys/socket.h>
   #include <unistd.h>
 #endif
+#include <sched.h>
+#include <sstream>
+#include <fstream>
+#include <cstring>
 #include "AudioIPC.h"
 #include <iostream>
 #include <string>
@@ -13,6 +17,55 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+
+void pin_to_isolated_cores() {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    bool set_any = false;
+
+    // Try to read isolated CPU cores from Linux sysfs
+    std::ifstream infile("/sys/devices/system/cpu/isolated");
+    std::string line;
+    if (infile && std::getline(infile, line) && !line.empty()) {
+        std::stringstream ss(line);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            if (token.find('-') != std::string::npos) {
+                // Range like "4-7"
+                size_t dash = token.find('-');
+                try {
+                    int start = std::stoi(token.substr(0, dash));
+                    int end = std::stoi(token.substr(dash + 1));
+                    for (int cpu = start; cpu <= end; ++cpu) {
+                        CPU_SET(cpu, &cpuset);
+                        set_any = true;
+                    }
+                } catch (...) {}
+            } else {
+                // Single core like "4"
+                try {
+                    int cpu = std::stoi(token);
+                    CPU_SET(cpu, &cpuset);
+                    set_any = true;
+                } catch (...) {}
+            }
+        }
+    }
+
+    // Fallback to default cores 4-7 if no isolated cores were parsed
+    if (!set_any) {
+        std::cout << ">>> No isolated cores found in sysfs. Falling back to default cores 4-7." << std::endl;
+        for (int cpu = 4; cpu <= 7; ++cpu) {
+            CPU_SET(cpu, &cpuset);
+        }
+    }
+
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
+        std::cout << ">>> [OK] Thread CPU affinity successfully set." << std::endl;
+    } else {
+        std::cerr << "[WARNING] Failed to set CPU affinity: " << strerror(errno) << std::endl;
+    }
+}
 
 // VST3 Entry Point Typedef
 typedef void* (*GetPluginFactoryFunc)();
@@ -85,14 +138,23 @@ int main(int argc, char* argv[]) {
 
     std::cout << ">>> [OK] Audio IPC Linked. Entering Real-Time Loop." << std::endl;
 
+    // Pin the guest processing thread to isolated cores
+    pin_to_isolated_cores();
+
     // Signal host daemon that the guest is fully connected and ready
     layout->state.store(arthur::TransportState::STATE_IDLE, std::memory_order_seq_cst);
     std::atomic_thread_fence(std::memory_order_seq_cst);
 
     // 4. Real-Time Processing Loop
     while (true) {
-        if (layout->state.load(std::memory_order_seq_cst) == arthur::TransportState::STATE_HOST_WRITTEN) {
+        auto current_state = layout->state.load(std::memory_order_seq_cst);
+        if (current_state == arthur::TransportState::STATE_ERROR) {
+            std::cout << ">>> Host reported error or timeout. Exiting." << std::endl;
+            break;
+        }
+        if (current_state == arthur::TransportState::STATE_HOST_WRITTEN) {
             std::atomic_thread_fence(std::memory_order_seq_cst);
+            auto start_time = std::chrono::high_resolution_clock::now();
             
             // --- WRAPPER FOR WINDOWS VST3 PROCESS() ---
             // For now, simple pass-through with gain to prove it's alive
@@ -104,11 +166,28 @@ int main(int argc, char* argv[]) {
             }
             // ------------------------------------------
 
+            // Safe synthetic dummy mathematical calculation cycles to fill the window
+            double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
+            double target_us = ((double)layout->sample_count * 1000000.0) / sr;
+            volatile float dummy = 0.0f;
+            while (true) {
+                auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::high_resolution_clock::now() - start_time
+                ).count();
+                if (elapsed_us >= target_us) {
+                    break;
+                }
+                dummy = dummy * 1.000001f + 0.000001f;
+                if (dummy > 10.0f) {
+                    dummy = 0.0f;
+                }
+            }
+
             layout->state.store(arthur::TransportState::STATE_GUEST_PROCESSED, std::memory_order_seq_cst);
             std::atomic_thread_fence(std::memory_order_seq_cst);
         }
         
-        Sleep(0); // Relinquish CPU slice
+        // Dead-poll: absolutely no yields or sleeps here
     }
 
     UnmapViewOfFile(layout);

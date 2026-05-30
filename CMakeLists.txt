@@ -64,12 +64,16 @@ add_executable(midi_sync midi_sync.cpp)
 target_include_directories(midi_sync PRIVATE ${ALSA_INCLUDE_DIRS})
 target_link_libraries(midi_sync PRIVATE ${ALSA_LIBRARIES} rt pthread)
 
+# --- Arthur Stress Test Utility ---
+add_executable(arthur_stress_test ArthurStressTest.cpp)
+target_link_libraries(arthur_stress_test PRIVATE rt pthread)
+
 # --- Installation rules ---
 if(BUILD_GUI)
     install(TARGETS arthur-control-center RUNTIME DESTINATION bin)
 endif()
 
-install(TARGETS arthur-daemon pw_module_clls midi_sync
+install(TARGETS arthur-daemon pw_module_clls midi_sync arthur_stress_test
     RUNTIME DESTINATION bin
 )
 

@@ -13,11 +13,63 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
+#include <sched.h>
+#include <sstream>
+#include <cstring>
 #include "AudioIPC.h"
 
 namespace fs = std::filesystem;
 
 const char* SOCKET_PATH = "/tmp/arthur.sock";
+
+void set_child_affinity() {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    bool set_any = false;
+
+    // Try to read isolated CPU cores from Linux sysfs
+    std::ifstream infile("/sys/devices/system/cpu/isolated");
+    std::string line;
+    if (infile && std::getline(infile, line) && !line.empty()) {
+        std::stringstream ss(line);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            if (token.find('-') != std::string::npos) {
+                // Range like "4-7"
+                size_t dash = token.find('-');
+                try {
+                    int start = std::stoi(token.substr(0, dash));
+                    int end = std::stoi(token.substr(dash + 1));
+                    for (int cpu = start; cpu <= end; ++cpu) {
+                        CPU_SET(cpu, &cpuset);
+                        set_any = true;
+                    }
+                } catch (...) {}
+            } else {
+                // Single core like "4"
+                try {
+                    int cpu = std::stoi(token);
+                    CPU_SET(cpu, &cpuset);
+                    set_any = true;
+                } catch (...) {}
+            }
+        }
+    }
+
+    // Fallback to default cores 4-7 if no isolated cores were parsed
+    if (!set_any) {
+        std::cout << "[DAEMON] No isolated cores found in sysfs. Falling back to default cores 4-7." << std::endl;
+        for (int cpu = 4; cpu <= 7; ++cpu) {
+            CPU_SET(cpu, &cpuset);
+        }
+    }
+
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
+        std::cout << "[DAEMON] Spawned child process CPU affinity set successfully." << std::endl;
+    } else {
+        std::cerr << "[DAEMON WARNING] Failed to set child CPU affinity: " << strerror(errno) << std::endl;
+    }
+}
 
 struct PluginInstance {
     pid_t guest_pid;
@@ -187,7 +239,9 @@ void handle_client(int client_fd) {
 
             if (!connected) {
                 std::cerr << "ERROR: Shared Memory IPC Connection Timeout" << std::endl;
-                kill(pid, SIGTERM);
+                transport->get()->state.store(arthur::TransportState::STATE_ERROR, std::memory_order_seq_cst);
+                std::atomic_thread_fence(std::memory_order_seq_cst);
+                kill(pid, SIGKILL);
                 int status;
                 waitpid(pid, &status, WNOHANG);
                 transport->detach();

@@ -7,8 +7,61 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <sched.h>
+#include <sstream>
+#include <fstream>
+#include <cstring>
 
 #include "AudioIPC.h"
+
+void pin_to_isolated_cores() {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    bool set_any = false;
+
+    // Try to read isolated CPU cores from Linux sysfs
+    std::ifstream infile("/sys/devices/system/cpu/isolated");
+    std::string line;
+    if (infile && std::getline(infile, line) && !line.empty()) {
+        std::stringstream ss(line);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            if (token.find('-') != std::string::npos) {
+                // Range like "4-7"
+                size_t dash = token.find('-');
+                try {
+                    int start = std::stoi(token.substr(0, dash));
+                    int end = std::stoi(token.substr(dash + 1));
+                    for (int cpu = start; cpu <= end; ++cpu) {
+                        CPU_SET(cpu, &cpuset);
+                        set_any = true;
+                    }
+                } catch (...) {}
+            } else {
+                // Single core like "4"
+                try {
+                    int cpu = std::stoi(token);
+                    CPU_SET(cpu, &cpuset);
+                    set_any = true;
+                } catch (...) {}
+            }
+        }
+    }
+
+    // Fallback to default cores 4-7 if no isolated cores were parsed
+    if (!set_any) {
+        std::cout << ">>> No isolated cores found in sysfs. Falling back to default cores 4-7." << std::endl;
+        for (int cpu = 4; cpu <= 7; ++cpu) {
+            CPU_SET(cpu, &cpuset);
+        }
+    }
+
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
+        std::cout << ">>> [OK] Thread CPU affinity successfully set." << std::endl;
+    } else {
+        std::cerr << "[WARNING] Failed to set CPU affinity: " << strerror(errno) << std::endl;
+    }
+}
 #include <pluginterfaces/base/ipluginbase.h>
 #include <pluginterfaces/vst/ivstcomponent.h>
 #include <pluginterfaces/vst/ivstaudioprocessor.h>
@@ -116,23 +169,50 @@ int main(int argc, char* argv[]) {
 
     if (plugin_path.find("dummy_plugin.dll") != std::string::npos) {
         std::cout << ">>> [OK] Running in dummy test mode." << std::endl;
+        pin_to_isolated_cores();
         layout->state.store(TransportState::STATE_IDLE, std::memory_order_seq_cst);
         std::atomic_thread_fence(std::memory_order_seq_cst);
         
         while (true) {
-            if (layout->state.load(std::memory_order_seq_cst) == TransportState::STATE_HOST_WRITTEN) {
+            auto current_state = layout->state.load(std::memory_order_seq_cst);
+            if (current_state == TransportState::STATE_ERROR) {
+                std::cout << ">>> Host reported error or timeout. Exiting." << std::endl;
+                break;
+            }
+            if (current_state == TransportState::STATE_HOST_WRITTEN) {
                 std::atomic_thread_fence(std::memory_order_seq_cst);
+                auto start_time = std::chrono::high_resolution_clock::now();
                 
-                // Copy inputs to outputs (pass-through)
+                // Copy inputs to outputs with gain of 0.5f (consistent with guest.cpp dummy)
+                float gain = 0.5f;
                 uint32_t active_channels = std::min(layout->num_inputs, layout->num_outputs);
                 for (uint32_t c = 0; c < active_channels; ++c) {
-                    memcpy(layout->output_buffers[c], layout->input_buffers[c], layout->sample_count * sizeof(float));
+                    for (uint32_t s = 0; s < layout->sample_count; ++s) {
+                        layout->output_buffers[c][s] = layout->input_buffers[c][s] * gain;
+                    }
                 }
                 
+                // Safe synthetic dummy mathematical calculation cycles to fill the window
+                double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
+                double target_us = ((double)layout->sample_count * 1000000.0) / sr;
+                volatile float dummy = 0.0f;
+                while (true) {
+                    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::high_resolution_clock::now() - start_time
+                    ).count();
+                    if (elapsed_us >= target_us) {
+                        break;
+                    }
+                    dummy = dummy * 1.000001f + 0.000001f;
+                    if (dummy > 10.0f) {
+                        dummy = 0.0f;
+                    }
+                }
+
                 layout->state.store(TransportState::STATE_GUEST_PROCESSED, std::memory_order_seq_cst);
                 std::atomic_thread_fence(std::memory_order_seq_cst);
             }
-            std::this_thread::yield();
+            // Dead-poll: absolutely no yields or sleeps here
         }
         
         if (hDevice != INVALID_HANDLE_VALUE) {
@@ -285,15 +365,24 @@ int main(int argc, char* argv[]) {
 
     std::cout << ">>> [OK] Plugin fully activated. Entering Real-Time Processing Loop." << std::endl;
 
+    // Pin the guest processing thread to isolated cores
+    pin_to_isolated_cores();
+
     // Reset layout state to IDLE
     layout->state.store(TransportState::STATE_IDLE, std::memory_order_seq_cst);
     std::atomic_thread_fence(std::memory_order_seq_cst);
 
     // 7. Real-Time IPC processing loop
     while (true) {
+        auto current_state = layout->state.load(std::memory_order_seq_cst);
+        if (current_state == TransportState::STATE_ERROR) {
+            std::cout << ">>> Host reported error or timeout. Exiting." << std::endl;
+            break;
+        }
         // Spin lock waiting for the host to write the next buffer
-        if (layout->state.load(std::memory_order_seq_cst) == TransportState::STATE_HOST_WRITTEN) {
+        if (current_state == TransportState::STATE_HOST_WRITTEN) {
             std::atomic_thread_fence(std::memory_order_seq_cst);
+            auto start_time = std::chrono::high_resolution_clock::now();
             
             // Set up ProcessData buffers
             ProcessData processData;
@@ -344,13 +433,29 @@ int main(int argc, char* argv[]) {
             // Process audio through the VST3 plugin!
             audioProcessor->process(processData);
 
+            // Safe synthetic dummy mathematical calculation cycles to fill the window
+            double sr = layout->sample_rate > 0 ? (double)layout->sample_rate : 48000.0;
+            double target_us = ((double)layout->sample_count * 1000000.0) / sr;
+            volatile float dummy = 0.0f;
+            while (true) {
+                auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::high_resolution_clock::now() - start_time
+                ).count();
+                if (elapsed_us >= target_us) {
+                    break;
+                }
+                dummy = dummy * 1.000001f + 0.000001f;
+                if (dummy > 10.0f) {
+                    dummy = 0.0f;
+                }
+            }
+
             // Notify Host
             layout->state.store(TransportState::STATE_GUEST_PROCESSED, std::memory_order_seq_cst);
             std::atomic_thread_fence(std::memory_order_seq_cst);
         }
 
-        // Relinquish remaining CPU slice to prevent 100% spinlock core saturation
-        std::this_thread::yield();
+        // Dead-poll: absolutely no yields or sleeps here
     }
 
     // 8. Clean up
