@@ -153,15 +153,14 @@ jobs:
         if [ -f arthur.desktop ]; then
           cp arthur.desktop AppDir/arthur.desktop
         else
-          cat > AppDir/arthur.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Arthur Translation Layer
-Icon=arthur
-Exec=arthur-cli
-Categories=Audio;AudioVideo;
-EOF
+          echo "[Desktop Entry]" > AppDir/arthur.desktop
+          echo "Type=Application" >> AppDir/arthur.desktop
+          echo "Name=Arthur Translation Layer" >> AppDir/arthur.desktop
+          echo "Icon=arthur" >> AppDir/arthur.desktop
+          echo "Exec=arthur-cli" >> AppDir/arthur.desktop
+          echo "Categories=Audio;AudioVideo;" >> AppDir/arthur.desktop
         fi
+
 
     - name: Build AppImage
       env:
