@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
 
     QApplication app(argc, argv);
     app.setApplicationName("Arthur Control Center");
-    app.setApplicationVersion("3.3.0");
+    app.setApplicationVersion("3.5.0");
 
     MainWindow w;
     w.resize(820, 520);
