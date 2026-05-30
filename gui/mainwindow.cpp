@@ -76,7 +76,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Initial config query
     QTimer::singleShot(200, this, &MainWindow::loadAudioConfig);
-    QTimer::singleShot(500, this, &MainWindow::loadVdcProfiles);
 }
 
 MainWindow::~MainWindow() {
@@ -305,12 +304,6 @@ void MainWindow::initUi() {
     btnInstaller->setFixedHeight(36);
     btnInstaller->setProperty("class", "navBtn");
 
-    QPushButton *btnRack = new QPushButton("  Virtual DSP Rack", m_sidebar);
-    btnRack->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogListView));
-    btnRack->setCursor(Qt::PointingHandCursor);
-    btnRack->setFixedHeight(36);
-    btnRack->setProperty("class", "navBtn");
-
     QPushButton *btnSettings = new QPushButton("  Audio Setup", m_sidebar);
     btnSettings->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileDialogDetailedView));
     btnSettings->setCursor(Qt::PointingHandCursor);
@@ -325,7 +318,6 @@ void MainWindow::initUi() {
 
     sidebarLayout->addWidget(btnDashboard);
     sidebarLayout->addWidget(btnInstaller);
-    sidebarLayout->addWidget(btnRack);
     sidebarLayout->addWidget(btnSettings);
     sidebarLayout->addWidget(btnConsole);
     sidebarLayout->addStretch();
@@ -355,14 +347,13 @@ void MainWindow::initUi() {
 
     // Connect Navigation Button Clicks to Stack switches
     auto refreshBtns = [=](QPushButton* active) {
-        for (QPushButton *b : {btnDashboard, btnInstaller, btnRack, btnSettings, btnConsole}) {
+        for (QPushButton *b : {btnDashboard, btnInstaller, btnSettings, btnConsole}) {
             b->setProperty("active", (b == active));
             b->style()->unpolish(b); b->style()->polish(b);
         }
     };
     connect(btnDashboard, &QPushButton::clicked, this, [=]() { refreshBtns(btnDashboard); showDashboard(); });
     connect(btnInstaller, &QPushButton::clicked, this, [=]() { refreshBtns(btnInstaller); showInstaller(); });
-    connect(btnRack,      &QPushButton::clicked, this, [=]() { refreshBtns(btnRack);      showRack();      });
     connect(btnSettings,  &QPushButton::clicked, this, [=]() { refreshBtns(btnSettings);  showSettings();  });
     connect(btnConsole,   &QPushButton::clicked, this, [=]() { refreshBtns(btnConsole);   showConsole();   });
 
@@ -639,7 +630,6 @@ void MainWindow::initUi() {
     connect(statusOkBtn, &QPushButton::clicked, this, [=]() {
         m_installStatusCard->setVisible(false);
         m_dropZone->setVisible(true);
-        loadVdcProfiles(); // reload to show newly installed plugins
     });
 
     statCardLayout->addWidget(m_installStatusIcon, 0, Qt::AlignCenter);
@@ -649,49 +639,6 @@ void MainWindow::initUi() {
     instLayout->addWidget(m_installStatusCard);
 
     m_contentArea->addWidget(m_installerTab);
-
-    // =========================================================================
-    // Stack 3: Virtual DSP Rack Tab
-    // =========================================================================
-    m_rackTab = new QWidget(this);
-    QVBoxLayout *rackLayout = new QVBoxLayout(m_rackTab);
-    rackLayout->setSpacing(10);
-
-    QLabel *rackTitle = new QLabel("Virtual DSP Cores (VDC) Rack", m_rackTab);
-    rackTitle->setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;");
-    QLabel *rackSub = new QLabel("Pre-load plugins into system memory slots locked on isolated real-time CPU cores.", m_rackTab);
-    rackSub->setStyleSheet("color: #a0a5b5; font-size: 11px;");
-
-    rackLayout->addWidget(rackTitle);
-    rackLayout->addWidget(rackSub);
-
-    QFrame *profHeader = new QFrame(m_rackTab);
-    profHeader->setProperty("class", "card");
-    QHBoxLayout *profHeaderLayout = new QHBoxLayout(profHeader);
-    profHeaderLayout->setContentsMargins(15, 8, 15, 8);
-    
-    QLabel *profSelectLabel = new QLabel("VDC DSP Profile:", profHeader);
-    profSelectLabel->setStyleSheet("font-weight: 600; color: #a0a5b5;");
-    m_profileSelect = new QComboBox(profHeader);
-    m_profileSelect->setProperty("class", "custom-select");
-    m_profileSelect->setMinimumWidth(220);
-    connect(m_profileSelect, &QComboBox::currentTextChanged, this, &MainWindow::onProfileChanged);
-
-    QPushButton *saveProfBtn = new QPushButton("Save Rack Configuration", profHeader);
-    saveProfBtn->setProperty("class", "action-btn");
-    saveProfBtn->setCursor(Qt::PointingHandCursor);
-    connect(saveProfBtn, &QPushButton::clicked, this, &MainWindow::saveCurrentProfile);
-
-    profHeaderLayout->addWidget(profSelectLabel);
-    profHeaderLayout->addWidget(m_profileSelect);
-    profHeaderLayout->addStretch();
-    profHeaderLayout->addWidget(saveProfBtn);
-    rackLayout->addWidget(profHeader);
-
-    m_rackGridWidget = new QWidget(m_rackTab);
-    rackLayout->addWidget(m_rackGridWidget);
-
-    m_contentArea->addWidget(m_rackTab);
 
     // =========================================================================
     // Stack 4: Audio Setup Tab
@@ -1052,10 +999,6 @@ void MainWindow::showDashboard() {
 void MainWindow::showInstaller() {
     m_contentArea->setCurrentWidget(m_installerTab);
 }
-void MainWindow::showRack() {
-    m_contentArea->setCurrentWidget(m_rackTab);
-    renderRackGrid();
-}
 void MainWindow::showSettings() {
     m_contentArea->setCurrentWidget(m_settingsTab);
 }
@@ -1082,7 +1025,12 @@ void MainWindow::rebuildConsoleChannels() {
     QStringList shmNames;
     QString response = "";
     QLocalSocket sock;
-    sock.connectToServer("/tmp/arthur-daemon.sock");
+    QString sockPath = "/tmp/arthur.sock";
+    QByteArray xdg = qgetenv("XDG_RUNTIME_DIR");
+    if (!xdg.isEmpty()) {
+        sockPath = QString(xdg) + "/arthur.sock";
+    }
+    sock.connectToServer(sockPath);
     if (sock.waitForConnected(500)) {
         sock.write("LIST_SHM\n");
         sock.flush();
@@ -1692,19 +1640,19 @@ void MainWindow::startCllsCalibration(int slotIdx) {
             int code2 = -1;
             bool flatpakMode = QFile::exists("/.flatpak-info");
             if (flatpakMode) {
-                code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
-                code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
-                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
-                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
-                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_2").arg(alignerName) << playDest1);
-                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_3").arg(alignerName) << playDest2);
+                code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:out_loopback").arg(alignerName) << outputPort);
+                code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:in_loopback").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:in_audio_L").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:in_audio_R").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:out_audio_L").arg(alignerName) << playDest1);
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:out_audio_R").arg(alignerName) << playDest2);
             } else {
-                code1 = QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
-                code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
-                QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
-                QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
-                QProcess::execute("pw-link", QStringList() << QString("%1:output_2").arg(alignerName) << playDest1);
-                QProcess::execute("pw-link", QStringList() << QString("%1:output_3").arg(alignerName) << playDest2);
+                code1 = QProcess::execute("pw-link", QStringList() << QString("%1:out_loopback").arg(alignerName) << outputPort);
+                code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:in_loopback").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:in_audio_L").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:in_audio_R").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << QString("%1:out_audio_L").arg(alignerName) << playDest1);
+                QProcess::execute("pw-link", QStringList() << QString("%1:out_audio_R").arg(alignerName) << playDest2);
             }
 
             QMetaObject::invokeMethod(this, [=]() {
@@ -1916,391 +1864,20 @@ QList<QString> MainWindow::queryPipeWirePorts() {
 }
 
 // =============================================================================
-// Virtual DSP Rack profile load/saves
+// Arthur Daemon command router
 // =============================================================================
-void MainWindow::loadVdcProfiles() {
-    QString configDir = QDir::homePath() + "/.config/arthur/profiles";
-    QDir().mkpath(configDir);
-
-    QDir dir(configDir);
-    m_availableProfiles.clear();
-    QStringList files = dir.entryList(QStringList() << "*.vdcp", QDir::Files);
-    for (const QString &file : files) {
-        m_availableProfiles.append(QFileInfo(file).baseName());
-    }
-
-    if (m_profileSelect) {
-        m_profileSelect->blockSignals(true);
-        m_profileSelect->clear();
-        for (const QString &prof : m_availableProfiles) {
-            m_profileSelect->addItem(prof + ".vdcp", prof);
-        }
-        m_profileSelect->addItem("Create Empty Profile...", "_create_empty_");
-        m_profileSelect->blockSignals(false);
-    }
-
-    if (!m_availableProfiles.isEmpty()) {
-        loadProfile(m_availableProfiles.first());
-    } else {
-        // Create default profiles if none exist
-        QList<QString> installed = scanInstalledVst3Plugins();
-        
-        m_currentProfile.profile_name = "Tracking_Session";
-        m_currentProfile.cores_allocated = "4-7";
-        m_currentProfile.sample_rate = 48000;
-        m_currentProfile.buffer_size = 128;
-        m_currentProfile.vdc_slots.clear();
-
-        if (!installed.isEmpty()) {
-            m_currentProfile.vdc_slots.append({1, "CH 1 INSERTS", installed[0], true});
-            if (installed.size() > 1) {
-                m_currentProfile.vdc_slots.append({2, "CH 1 INSERTS", installed[1], true});
-            }
-            if (installed.size() > 2) {
-                m_currentProfile.vdc_slots.append({1, "CH 2 INSERTS", installed[2], true});
-            }
-        } else {
-            m_currentProfile.vdc_slots.append({1, "CH 1 INSERTS", "CyberDenoiserPro", true});
-        }
-
-        saveCurrentProfile();
-
-        m_currentProfile.profile_name = "Mixdown_Mastering";
-        m_currentProfile.sample_rate = 96000;
-        m_currentProfile.buffer_size = 256;
-        m_currentProfile.vdc_slots.clear();
-        if (!installed.isEmpty()) {
-            m_currentProfile.vdc_slots.append({1, "CH 3 INSERTS", installed.first(), true});
-        } else {
-            m_currentProfile.vdc_slots.append({1, "CH 3 INSERTS", "THE MIDS ROOM", true});
-        }
-
-        saveCurrentProfile();
-        loadVdcProfiles(); // Reload dropdown
-    }
-}
-
-void MainWindow::loadProfile(const QString &name) {
-    QString path = QDir::homePath() + QString("/.config/arthur/profiles/%1.vdcp").arg(name);
-    QFile file(path);
-    if (file.open(QIODevice::ReadOnly)) {
-        QByteArray data = file.readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(data);
-        QJsonObject obj = doc.object();
-
-        m_currentProfile.profile_name = obj["profile_name"].toString();
-        m_currentProfile.cores_allocated = obj["cores_allocated"].toString();
-        m_currentProfile.sample_rate = obj["sample_rate"].toInt();
-        m_currentProfile.buffer_size = obj["buffer_size"].toInt();
-        m_currentProfile.vdc_slots.clear();
-
-        QJsonArray slotsArr = obj["slots"].toArray();
-        for (int i = 0; i < slotsArr.size(); ++i) {
-            QJsonObject slotObj = slotsArr[i].toObject();
-            VdcSlot slot;
-            slot.slot_id = slotObj["slot_id"].toInt();
-            slot.channel_name = slotObj["channel_name"].toString();
-            slot.vst3_dll_path = slotObj["vst3_dll_path"].toString();
-            slot.active = slotObj["active"].toBool();
-            m_currentProfile.vdc_slots.append(slot);
-        }
-
-        m_activeSampleRate = m_currentProfile.sample_rate;
-        if (m_sampleRateSelect) {
-            int idx = m_sampleRateSelect->findData(m_currentProfile.sample_rate);
-            if (idx >= 0) m_sampleRateSelect->setCurrentIndex(idx);
-        }
-        if (m_bufferSizeSelect) {
-            int idx = m_bufferSizeSelect->findData(m_currentProfile.buffer_size);
-            if (idx >= 0) m_bufferSizeSelect->setCurrentIndex(idx);
-        }
-        renderRackGrid();
-
-        // Auto setup core preloads on profile load
-        QStringList newActiveShms;
-        for (const VdcSlot &slot : m_currentProfile.vdc_slots) {
-            if (slot.active && !slot.vst3_dll_path.isEmpty()) {
-                QString shmName = QString("arthur_%1_slot_%2").arg(slot.vst3_dll_path).arg(slot.slot_id);
-                newActiveShms.append(shmName);
-
-                if (!m_activePreloadedShms.contains(shmName)) {
-                    QString msg = QString("LOAD %1 %2").arg(shmName).arg(slot.vst3_dll_path);
-                    sendDaemonCommand(msg);
-                }
-            }
-        }
-
-        // Dismantle old preloads not present/active in the new profile
-        for (const QString &prevShm : m_activePreloadedShms) {
-            if (!newActiveShms.contains(prevShm)) {
-                QString msg = QString("UNLOAD %1").arg(prevShm);
-                sendDaemonCommand(msg);
-            }
-        }
-
-        m_activePreloadedShms = newActiveShms;
-    }
-}
-
 void MainWindow::sendDaemonCommand(const QString &cmd) {
     QLocalSocket socket;
-    socket.connectToServer("/tmp/arthur.sock");
+    QString sockPath = "/tmp/arthur.sock";
+    QByteArray xdg = qgetenv("XDG_RUNTIME_DIR");
+    if (!xdg.isEmpty()) {
+        sockPath = QString(xdg) + "/arthur.sock";
+    }
+    socket.connectToServer(sockPath);
     if (socket.waitForConnected(200)) {
         socket.write(cmd.toUtf8());
         socket.waitForBytesWritten(200);
     }
-}
-
-void MainWindow::onProfileChanged(const QString &profileName) {
-    QString val = m_profileSelect->currentData().toString();
-    if (val == "_create_empty_") {
-        // Prompt dialog
-        QDialog diag(this);
-        diag.setWindowTitle("Create Empty Profile");
-        diag.setMinimumWidth(300);
-        QVBoxLayout *l = new QVBoxLayout(&diag);
-        QLabel *lbl = new QLabel("Enter profile name:", &diag);
-        QLineEdit *edit = new QLineEdit(&diag);
-        edit->setProperty("class", "custom-input");
-        QHBoxLayout *btnLayout = new QHBoxLayout();
-        QPushButton *ok = new QPushButton("Create", &diag);
-        ok->setProperty("class", "action-btn");
-        QPushButton *cancel = new QPushButton("Cancel", &diag);
-        cancel->setProperty("class", "settings-btn");
-        btnLayout->addWidget(cancel);
-        btnLayout->addWidget(ok);
-        l->addWidget(lbl);
-        l->addWidget(edit);
-        l->addLayout(btnLayout);
-
-        connect(ok, &QPushButton::clicked, &diag, &QDialog::accept);
-        connect(cancel, &QPushButton::clicked, &diag, &QDialog::reject);
-
-        if (diag.exec() == QDialog::Accepted && !edit->text().trimmed().isEmpty()) {
-            QString cleanName = edit->text().trimmed().replace(" ", "_");
-            m_currentProfile.profile_name = cleanName;
-            m_currentProfile.cores_allocated = "4-7";
-            m_currentProfile.sample_rate = m_activeSampleRate;
-            m_currentProfile.buffer_size = 128;
-            m_currentProfile.vdc_slots.clear();
-
-            saveCurrentProfile();
-            loadVdcProfiles();
-            // Select newly created profile
-            int idx = m_profileSelect->findData(cleanName);
-            if (idx >= 0) m_profileSelect->setCurrentIndex(idx);
-        } else {
-            // Restore previous profile
-            int idx = m_profileSelect->findData(m_currentProfile.profile_name);
-            if (idx >= 0) {
-                m_profileSelect->blockSignals(true);
-                m_profileSelect->setCurrentIndex(idx);
-                m_profileSelect->blockSignals(false);
-            }
-        }
-    } else if (!val.isEmpty()) {
-        loadProfile(val);
-    }
-}
-
-void MainWindow::saveCurrentProfile() {
-    QString path = QDir::homePath() + QString("/.config/arthur/profiles/%1.vdcp").arg(m_currentProfile.profile_name);
-    
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly)) {
-        QJsonObject obj;
-        obj["profile_name"] = m_currentProfile.profile_name;
-        obj["cores_allocated"] = m_currentProfile.cores_allocated.isEmpty() ? "4-7" : m_currentProfile.cores_allocated;
-        obj["sample_rate"] = static_cast<int>(m_currentProfile.sample_rate);
-        obj["buffer_size"] = static_cast<int>(m_currentProfile.buffer_size);
-
-        QStringList newActiveShms;
-        QJsonArray slotsArr;
-        for (const VdcSlot &slot : m_currentProfile.vdc_slots) {
-            QJsonObject slotObj;
-            slotObj["slot_id"] = slot.slot_id;
-            slotObj["channel_name"] = slot.channel_name;
-            slotObj["vst3_dll_path"] = slot.vst3_dll_path;
-            slotObj["active"] = slot.active;
-            slotsArr.append(slotObj);
-
-            // Notify arthur-daemon client load for active VST guest slots using slot-based naming
-            if (slot.active && !slot.vst3_dll_path.isEmpty()) {
-                QString shmName = QString("arthur_%1_slot_%2").arg(slot.vst3_dll_path).arg(slot.slot_id);
-                newActiveShms.append(shmName);
-                
-                if (!m_activePreloadedShms.contains(shmName)) {
-                    QString msg = QString("LOAD %1 %2").arg(shmName).arg(slot.vst3_dll_path);
-                    sendDaemonCommand(msg);
-                }
-            }
-        }
-        obj["slots"] = slotsArr;
-
-        QJsonDocument doc(obj);
-        file.write(doc.toJson());
-        file.close();
-
-        // Send UNLOAD commands for any preloaded instances that were disabled or deleted
-        for (const QString &prevShm : m_activePreloadedShms) {
-            if (!newActiveShms.contains(prevShm)) {
-                QString msg = QString("UNLOAD %1").arg(prevShm);
-                sendDaemonCommand(msg);
-            }
-        }
-
-        // Update tracking
-        m_activePreloadedShms = newActiveShms;
-
-        updateGlobalStatus("✓ Saved Profile", QString("Profile '%1' saved and synced successfully.").arg(m_currentProfile.profile_name), true);
-    }
-}
-
-void MainWindow::renderRackGrid() {
-    // Recreate grid
-    QLayoutItem *child;
-    if (m_rackGridWidget->layout() != nullptr) {
-        while ((child = m_rackGridWidget->layout()->takeAt(0)) != nullptr) {
-            delete child->widget();
-            delete child;
-        }
-        delete m_rackGridWidget->layout();
-    }
-
-    QVBoxLayout *layout = new QVBoxLayout(m_rackGridWidget);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(8);
-
-    // Header Row with title and Add button
-    QHBoxLayout *headerLayout = new QHBoxLayout();
-    QLabel *lblTitle = new QLabel("Active Solo DSP Instances", m_rackGridWidget);
-    lblTitle->setStyleSheet("font-weight: 800; font-size: 14px; color: #ffffff;");
-    
-    QPushButton *addInstanceBtn = new QPushButton("+ Add Solo DSP Instance", m_rackGridWidget);
-    addInstanceBtn->setProperty("class", "action-btn");
-    addInstanceBtn->setCursor(Qt::PointingHandCursor);
-    addInstanceBtn->setFixedWidth(180);
-    connect(addInstanceBtn, &QPushButton::clicked, this, [=]() {
-        VdcSlot newSlot;
-        newSlot.slot_id = m_currentProfile.vdc_slots.size() + 1;
-        newSlot.channel_name = "Solo Rack";
-        newSlot.vst3_dll_path = "";
-        newSlot.active = false;
-        m_currentProfile.vdc_slots.append(newSlot);
-        renderRackGrid();
-    });
-
-    headerLayout->addWidget(lblTitle);
-    headerLayout->addStretch();
-    headerLayout->addWidget(addInstanceBtn);
-    layout->addLayout(headerLayout);
-
-    // Column Headers
-    QHBoxLayout *colHeaders = new QHBoxLayout();
-    colHeaders->setContentsMargins(10, 5, 10, 5);
-    
-    QLabel *hActive = new QLabel("Active", m_rackGridWidget);
-    hActive->setFixedWidth(60);
-    hActive->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
-    
-    QLabel *hPlugin = new QLabel("VST3 Plugin", m_rackGridWidget);
-    hPlugin->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
-    
-    QLabel *hDelete = new QLabel("Action", m_rackGridWidget);
-    hDelete->setFixedWidth(60);
-    hDelete->setAlignment(Qt::AlignCenter);
-    hDelete->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
-
-    colHeaders->addWidget(hActive);
-    colHeaders->addWidget(hPlugin);
-    colHeaders->addWidget(hDelete);
-    layout->addLayout(colHeaders);
-
-    // Scroll Area for rows
-    QScrollArea *scrollArea = new QScrollArea(m_rackGridWidget);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setStyleSheet("background-color: transparent;");
-    
-    QWidget *scrollContent = new QWidget(scrollArea);
-    scrollContent->setStyleSheet("background-color: transparent;");
-    QVBoxLayout *scrollLayout = new QVBoxLayout(scrollContent);
-    scrollLayout->setContentsMargins(0, 0, 0, 0);
-    scrollLayout->setSpacing(6);
-
-    QList<QString> installedPlugins = scanInstalledVst3Plugins();
-
-    for (int i = 0; i < m_currentProfile.vdc_slots.size(); ++i) {
-        VdcSlot &slot = m_currentProfile.vdc_slots[i];
-        
-        QFrame *rowFrame = new QFrame(scrollContent);
-        rowFrame->setStyleSheet("QFrame { background-color: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; } QFrame:hover { background-color: rgba(255,255,255,0.04); }");
-        
-        QHBoxLayout *rowLayout = new QHBoxLayout(rowFrame);
-        rowLayout->setContentsMargins(10, 6, 10, 6);
-        rowLayout->setSpacing(10);
-
-        // 1. Active Checkbox
-        QCheckBox *chkActive = new QCheckBox(rowFrame);
-        chkActive->setFixedWidth(60);
-        chkActive->setChecked(slot.active);
-        connect(chkActive, &QCheckBox::toggled, this, [=](bool checked) {
-            m_currentProfile.vdc_slots[i].active = checked;
-        });
-
-        // 2. Plugin Selector
-        QComboBox *cmbPlugin = new QComboBox(rowFrame);
-        cmbPlugin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        cmbPlugin->setProperty("class", "custom-select");
-        for (const QString &plug : installedPlugins) {
-            cmbPlugin->addItem(plug, plug);
-        }
-        if (cmbPlugin->count() == 0) {
-            cmbPlugin->addItem("CyberDenoiserPro (Mock)", "CyberDenoiserPro");
-            cmbPlugin->addItem("THE MIDS ROOM (Mock)", "THE MIDS ROOM");
-            cmbPlugin->addItem("Strobe Poly Tuner (Mock)", "Strobe Poly Tuner");
-        }
-        int plugIdx = cmbPlugin->findData(slot.vst3_dll_path);
-        if (plugIdx >= 0) {
-            cmbPlugin->setCurrentIndex(plugIdx);
-        } else if (cmbPlugin->count() > 0) {
-            m_currentProfile.vdc_slots[i].vst3_dll_path = cmbPlugin->currentData().toString();
-        }
-        connect(cmbPlugin, &QComboBox::currentTextChanged, this, [=](const QString &text) {
-            m_currentProfile.vdc_slots[i].vst3_dll_path = text;
-        });
-
-        // 3. Delete Button
-        QPushButton *btnDelete = new QPushButton("✖", rowFrame);
-        btnDelete->setFixedSize(60, 26);
-        btnDelete->setCursor(Qt::PointingHandCursor);
-        btnDelete->setStyleSheet("background: transparent; border: none; color: rgba(255,255,255,0.4); font-size: 14px;");
-        btnDelete->setToolTip("Delete Solo DSP Instance");
-        connect(btnDelete, &QPushButton::clicked, this, [=]() {
-            m_currentProfile.vdc_slots.removeAt(i);
-            renderRackGrid();
-        });
-
-        rowLayout->addWidget(chkActive);
-        rowLayout->addWidget(cmbPlugin);
-        rowLayout->addWidget(btnDelete);
-
-        scrollLayout->addWidget(rowFrame);
-    }
-    
-    scrollLayout->addStretch();
-    scrollArea->setWidget(scrollContent);
-    layout->addWidget(scrollArea);
-}
-
-void MainWindow::handleRemoveSlotClick(const QString &channelName, int slotId) {
-    Q_UNUSED(channelName);
-    Q_UNUSED(slotId);
-}
-
-void MainWindow::handleAddSlotClick(const QString &channelName, int slotId) {
-    Q_UNUSED(channelName);
-    Q_UNUSED(slotId);
 }
 
 // =============================================================================

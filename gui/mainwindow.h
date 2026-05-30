@@ -38,20 +38,7 @@ protected:
 };
 
 // --- Main Audio Control Window ---
-struct VdcSlot {
-    int slot_id;
-    QString channel_name;
-    QString vst3_dll_path;
-    bool active;
-};
 
-struct VdcProfile {
-    QString profile_name;
-    QString cores_allocated;
-    unsigned int sample_rate;
-    unsigned int buffer_size;
-    QList<VdcSlot> vdc_slots;
-};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -64,7 +51,6 @@ private slots:
     // Tab switching
     void showDashboard();
     void showInstaller();
-    void showRack();
     void showSettings();
     void showConsole();
 
@@ -80,13 +66,6 @@ private slots:
     void populatePortsForSlot(int slotIdx);
     void saveAudioConfig();
 
-    // Virtual DSP Rack
-    void loadVdcProfiles();
-    void onProfileChanged(const QString &profileName);
-    void saveCurrentProfile();
-    void renderRackGrid();
-    void handleAddSlotClick(const QString &channelName, int slotId);
-    void handleRemoveSlotClick(const QString &channelName, int slotId);
 
     // VST3 Installer Wizard
     void startInstaller(const QString &filePath);
@@ -103,7 +82,6 @@ private:
     void initUi();
     void setupGlobalStylesheet();
     void ensureDaemonRunning();
-    void loadProfile(const QString &name);
     void sendDaemonCommand(const QString &cmd);
     QList<QString> scanInstalledVst3Plugins();
     QList<QString> queryPipeWirePorts();
@@ -111,8 +89,6 @@ private:
     void updateGlobalStatus(const QString &title, const QString &description, bool active);
 
     // --- State variables ---
-    VdcProfile m_currentProfile;
-    QList<QString> m_availableProfiles;
     QStringList m_activePreloadedShms;
     unsigned int m_activeSampleRate;
     bool m_isUpdatingConfig;
@@ -122,7 +98,6 @@ private:
     QStackedWidget *m_contentArea;
     QWidget *m_dashboardTab;
     QWidget *m_installerTab;
-    QWidget *m_rackTab;
     QWidget *m_settingsTab;
     QWidget *m_consoleTab;
 
@@ -200,9 +175,6 @@ private:
     QLabel *m_tuningStatusDesc;
     QWidget *m_tuningCard;
 
-    // Rack Elements
-    QComboBox *m_profileSelect;
-    QWidget *m_rackGridWidget;
 
     // Background System Processes
     QProcess *m_installerProcess;
