@@ -18,6 +18,9 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QStackedWidget>
+#include <QMessageBox>
+#include <QRandomGenerator>
+#include <thread>
 
 // --- Custom Drag and Drop Zone for Windows Installers ---
 class DropZoneWidget : public QFrame {
@@ -180,6 +183,7 @@ private:
     QWidget *m_tuningStatusCard;
     QLabel *m_tuningStatusTitle;
     QLabel *m_tuningStatusDesc;
+    QWidget *m_tuningCard;
 
     // Rack Elements
     QComboBox *m_profileSelect;

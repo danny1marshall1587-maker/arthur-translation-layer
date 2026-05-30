@@ -515,7 +515,7 @@ void MainWindow::initUi() {
     for (int i = 0; i < 20; ++i) {
         QFrame *bar = new QFrame(graphFrame);
         bar->setStyleSheet("background-color: #007aff; border-radius: 3px;");
-        bar->setFixedHeight(20 + rand() % 25);
+        bar->setFixedHeight(20 + QRandomGenerator::global()->bounded(25));
         bar->setFixedWidth(10);
         m_latencyBars.append(bar);
         graphInnerLayout->addWidget(bar, 0, Qt::AlignBottom);
@@ -531,7 +531,7 @@ void MainWindow::initUi() {
         bool active = m_midiSlaveCheck ? m_midiSlaveCheck->isChecked() : true;
         for (QWidget *bar : m_latencyBars) {
             if (active) {
-                int height = 10 + rand() % 35;
+                int height = 10 + QRandomGenerator::global()->bounded(35);
                 bar->setFixedHeight(height);
                 bar->setStyleSheet("background-color: #007aff; border-radius: 3px; opacity: 1.0;");
             } else {
@@ -882,6 +882,7 @@ void MainWindow::initUi() {
 
     // Wide Tuning Card
     QFrame *tuningCard = new QFrame(m_settingsTab);
+    m_tuningCard = tuningCard;
     tuningCard->setProperty("class", "card");
     QVBoxLayout *tuneLayout = new QVBoxLayout(tuningCard);
     
@@ -975,7 +976,7 @@ void MainWindow::initUi() {
     tOkBtn->setCursor(Qt::PointingHandCursor);
     connect(tOkBtn, &QPushButton::clicked, this, [=]() {
         m_tuningStatusCard->setVisible(false);
-        m_tuningStatusCard->setVisible(true); // reset
+        m_tuningCard->setVisible(true);
     });
 
     tStatLayout->addWidget(m_tuningStatusTitle);
@@ -1017,7 +1018,7 @@ void MainWindow::querySystemStatus() {
     // VDC Load calculation simulation or query
     float vdcLoad = 34.8f;
     if (active) {
-        vdcLoad = 30.0f + (rand() % 150) / 10.0f;
+        vdcLoad = 30.0f + QRandomGenerator::global()->bounded(150) / 10.0f;
     } else {
         vdcLoad = 0.0f;
     }
@@ -1101,7 +1102,7 @@ void MainWindow::loadAudioConfig() {
         
         // Fallback interface
         if (m_audioInterfaceSelect->count() == 0) {
-            m_audioInterfaceSelect->addItem("EVO4 Pro (Fallback)", "alsa_output.usb-Audient_EVO4-00.pro-output-0");
+            m_audioInterfaceSelect->addItem("No audio interfaces found", "");
         }
 
         // Check if config file exists
@@ -1306,44 +1307,51 @@ void MainWindow::applyAudioConfig() {
 
     bool flatpakMode = QFile::exists("/.flatpak-info");
 
-    // Set default sink
-    if (flatpakMode) {
-        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pactl" << "set-default-sink" << interface);
-    } else {
-        QProcess::execute("pactl", QStringList() << "set-default-sink" << interface);
-    }
+    updateGlobalStatus("⚡ Applying", "Applying audio configuration...", true);
 
-    // Set force-rate
-    if (flatpakMode) {
-        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
-    } else {
-        QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
-    }
+    std::thread([=]() {
+        bool flatpakMode = QFile::exists("/.flatpak-info");
 
-    // Set force-quantum
-    if (flatpakMode) {
-        QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
-    } else {
-        QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
-    }
-
-    // Slaving daemon control
-    if (slaveMidi) {
-        QProcess pgrep;
-        pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
-        pgrep.waitForFinished(500);
-        if (pgrep.exitCode() != 0) {
-            // Spawn midi_sync
-            QProcess::startDetached(QCoreApplication::applicationDirPath() + "/midi_sync", QStringList());
+        // Set default sink
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pactl" << "set-default-sink" << interface);
+        } else {
+            QProcess::execute("pactl", QStringList() << "set-default-sink" << interface);
         }
-    } else {
-        QProcess::execute("pkill", QStringList() << "-x" << "midi_sync");
-    }
 
-    updateGlobalStatus("✓ Sync Active", "Audio settings updated successfully.", true);
+        // Set force-rate
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+        } else {
+            QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-rate" << QString::number(rate));
+        }
 
-    // Save the config values since they have changed
-    saveAudioConfig();
+        // Set force-quantum
+        if (flatpakMode) {
+            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-metadata" << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+        } else {
+            QProcess::execute("pw-metadata", QStringList() << "-n" << "settings" << "0" << "clock.force-quantum" << QString::number(quantum));
+        }
+
+        // Slaving daemon control
+        if (slaveMidi) {
+            QProcess pgrep;
+            pgrep.start("pgrep", QStringList() << "-x" << "midi_sync");
+            pgrep.waitForFinished(500);
+            if (pgrep.exitCode() != 0) {
+                // Spawn midi_sync
+                QProcess::startDetached(QCoreApplication::applicationDirPath() + "/midi_sync", QStringList());
+            }
+        } else {
+            QProcess::execute("pkill", QStringList() << "-x" << "midi_sync");
+        }
+
+        QMetaObject::invokeMethod(this, [=]() {
+            updateGlobalStatus("✓ Sync Active", "Audio settings updated successfully.", true);
+            // Save the config values since they have changed
+            saveAudioConfig();
+        });
+    }).detach();
 }
 
 void MainWindow::saveAudioConfig() {
@@ -1449,6 +1457,9 @@ void MainWindow::startCllsCalibration(int slotIdx) {
 
     QString alignerName = QString("CLLS-Aligner-%1").arg(slotIdx + 1);
 
+    if (slot.process) {
+        slot.process->deleteLater();
+    }
     slot.process = new QProcess(this);
     slot.process->setProcessChannelMode(QProcess::MergedChannels);
     connect(slot.process, &QProcess::readyReadStandardOutput, this, [=]() { readCllsOutput(slotIdx); });
@@ -1472,33 +1483,53 @@ void MainWindow::startCllsCalibration(int slotIdx) {
             }
         }
         
+        QList<QString> interfacePlaybackPorts;
+        for (const QString &port : allPorts) {
+            if (port.startsWith(interface) && port.contains("playback")) {
+                interfacePlaybackPorts.append(port);
+            }
+        }
+        
         QString anchor1 = interfaceCapturePorts.size() > 0 ? interfaceCapturePorts[0] : QString("%1:capture_AUX0").arg(inputInterface);
         QString anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
+        QString playDest1 = interfacePlaybackPorts.size() > 0 ? interfacePlaybackPorts[0] : QString("%1:playback_AUX0").arg(interface);
+        QString playDest2 = interfacePlaybackPorts.size() > 1 ? interfacePlaybackPorts[1] : QString("%1:playback_AUX1").arg(interface);
 
-        // Link
-        int code1 = -1;
-        int code2 = -1;
-        bool flatpakMode = QFile::exists("/.flatpak-info");
-        if (flatpakMode) {
-            code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
-            code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
-            QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
-        } else {
-            code1 = QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
-            code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
-            QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
-            QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
-        }
+        // Link in a background thread to prevent blocking main GUI thread
+        std::thread([=]() {
+            int code1 = -1;
+            int code2 = -1;
+            bool flatpakMode = QFile::exists("/.flatpak-info");
+            if (flatpakMode) {
+                code1 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_1").arg(alignerName) << outputPort);
+                code2 = QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << inputPort << QString("%1:input_1").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor1 << QString("%1:input_2").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << anchor2 << QString("%1:input_3").arg(alignerName));
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_2").arg(alignerName) << playDest1);
+                QProcess::execute("flatpak-spawn", QStringList() << "--host" << "pw-link" << QString("%1:output_3").arg(alignerName) << playDest2);
+            } else {
+                code1 = QProcess::execute("pw-link", QStringList() << QString("%1:output_1").arg(alignerName) << outputPort);
+                code2 = QProcess::execute("pw-link", QStringList() << inputPort << QString("%1:input_1").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << anchor1 << QString("%1:input_2").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << anchor2 << QString("%1:input_3").arg(alignerName));
+                QProcess::execute("pw-link", QStringList() << QString("%1:output_2").arg(alignerName) << playDest1);
+                QProcess::execute("pw-link", QStringList() << QString("%1:output_3").arg(alignerName) << playDest2);
+            }
 
-        if (code1 == 0 && code2 == 0) {
-            slot.statusBadge->setText("Awaiting Loopback");
-            slot.statusBadge->setStyleSheet("background-color: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
-        } else {
-            slot.statusBadge->setText("Link Error");
-            slot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
-            updateGlobalStatus("⚠ Link Error", QString("pw-link failed to route Slot %1. Check audio configurations.").arg(slotIdx + 1), false);
-        }
+            QMetaObject::invokeMethod(this, [=]() {
+                if (slotIdx >= 0 && slotIdx < 3) {
+                    CllsSlot &cllsSlot = m_cllsSlots[slotIdx];
+                    if (code1 == 0 && code2 == 0) {
+                        cllsSlot.statusBadge->setText("Awaiting Loopback");
+                        cllsSlot.statusBadge->setStyleSheet("background-color: rgba(255,159,10,0.15); color: #ff9f0a; border: 1px solid rgba(255,159,10,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+                    } else {
+                        cllsSlot.statusBadge->setText("Link Error");
+                        cllsSlot.statusBadge->setStyleSheet("background-color: rgba(255,69,58,0.15); color: #ff453a; border: 1px solid rgba(255,69,58,0.3); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold;");
+                        updateGlobalStatus("⚠ Link Error", QString("pw-link failed to route Slot %1. Check audio configurations.").arg(slotIdx + 1), false);
+                    }
+                }
+            });
+        }).detach();
     });
 }
 
@@ -1544,7 +1575,7 @@ void MainWindow::readCllsOutput(int slotIdx) {
             }
 
             if (slotIdx == 0) {
-                int jitterNs = 100 + rand() % 400;
+                int jitterNs = 100 + QRandomGenerator::global()->bounded(400);
                 float jitterSamples = jitterNs / 1000000000.0f * m_activeSampleRate;
                 if (m_cllsJitterVal) m_cllsJitterVal->setText(QString("±%1 ns (±%2 samples)").arg(jitterNs).arg(jitterSamples, 0, 'f', 4));
             }
@@ -1686,37 +1717,9 @@ QList<QString> MainWindow::queryPipeWirePorts() {
     }
     // Fallbacks if empty
     if (ports.isEmpty()) {
-        // EVO4 Pro Playback, Capture, Monitor (all 4 channels)
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX0");
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX1");
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX2");
-        ports.append("alsa_input.usb-Audient_EVO4-00.pro-input-0:capture_AUX3");
-        
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX0");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX1");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX2");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:playback_AUX3");
-
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX0");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX1");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX2");
-        ports.append("alsa_output.usb-Audient_EVO4-00.pro-output-0:monitor_AUX3");
-
-        // HeadRush Flex Prime (all 4 channels)
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_FL");
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_FR");
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_RL");
-        ports.append("alsa_input.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:capture_RR");
-
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_FL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_FR");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_RL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:playback_RR");
-
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_FL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_FR");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_RL");
-        ports.append("alsa_output.usb-HeadRush_HeadRush_Flex_Prime_0000000000000000-00.analog-surround-40:monitor_RR");
+        QMetaObject::invokeMethod(QApplication::instance(), []() {
+            QMessageBox::warning(nullptr, "PipeWire Error", "No active PipeWire audio ports were detected. Please ensure the PipeWire daemon is running.");
+        });
     }
     return ports;
 }
@@ -2050,8 +2053,8 @@ void MainWindow::renderRackGrid() {
         QCheckBox *chkActive = new QCheckBox(rowFrame);
         chkActive->setFixedWidth(60);
         chkActive->setChecked(slot.active);
-        connect(chkActive, &QCheckBox::toggled, this, [=, &slot](bool checked) {
-            slot.active = checked;
+        connect(chkActive, &QCheckBox::toggled, this, [=](bool checked) {
+            m_currentProfile.vdc_slots[i].active = checked;
         });
 
         // 2. Plugin Selector
@@ -2070,10 +2073,10 @@ void MainWindow::renderRackGrid() {
         if (plugIdx >= 0) {
             cmbPlugin->setCurrentIndex(plugIdx);
         } else if (cmbPlugin->count() > 0) {
-            slot.vst3_dll_path = cmbPlugin->currentData().toString();
+            m_currentProfile.vdc_slots[i].vst3_dll_path = cmbPlugin->currentData().toString();
         }
-        connect(cmbPlugin, &QComboBox::currentTextChanged, this, [=, &slot](const QString &text) {
-            slot.vst3_dll_path = text;
+        connect(cmbPlugin, &QComboBox::currentTextChanged, this, [=](const QString &text) {
+            m_currentProfile.vdc_slots[i].vst3_dll_path = text;
         });
 
         // 3. Delete Button
@@ -2131,6 +2134,10 @@ void MainWindow::startInstaller(const QString &filePath) {
         m_installConsole->append(QString("Initializing installation pipeline for: %1\n").arg(filePath));
     }
 
+    if (m_installerProcess) {
+        m_installerProcess->kill();
+        m_installerProcess->deleteLater();
+    }
     m_installerProcess = new QProcess(this);
     connect(m_installerProcess, &QProcess::readyReadStandardOutput, this, &MainWindow::readInstallerOutput);
     connect(m_installerProcess, &QProcess::readyReadStandardError, this, &MainWindow::readInstallerOutput);
@@ -2207,7 +2214,7 @@ void MainWindow::runSystemTuning() {
     int coresVal = m_coresSlider->value();
     QString targetCores = coresVal <= 4 ? "4" : QString("4-%1").arg(coresVal);
 
-    m_tuningStatusCard->setVisible(false);
+    m_tuningCard->setVisible(false);
     m_tuningStatusCard->setVisible(false);
     m_tuningProgressCard->setVisible(true);
 
@@ -2216,6 +2223,10 @@ void MainWindow::runSystemTuning() {
     m_tuningConsole->clear();
     m_tuningConsole->append("Starting System Setup Wizard...\n");
 
+    if (m_tuningProcess) {
+        m_tuningProcess->kill();
+        m_tuningProcess->deleteLater();
+    }
     m_tuningProcess = new QProcess(this);
     connect(m_tuningProcess, &QProcess::readyReadStandardOutput, this, &MainWindow::readTuningOutput);
     connect(m_tuningProcess, &QProcess::readyReadStandardError, this, &MainWindow::readTuningOutput);

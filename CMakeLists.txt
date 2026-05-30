@@ -42,6 +42,7 @@ endif()
 add_library(arthur_bridge SHARED
     main.cpp
     vstiids.cpp
+    AraPathTranslator.cpp
 )
 target_include_directories(arthur_bridge PRIVATE 
     ${CMAKE_SOURCE_DIR}
@@ -49,6 +50,7 @@ target_include_directories(arthur_bridge PRIVATE
 )
 target_link_libraries(arthur_bridge PRIVATE rt pthread)
 set_target_properties(arthur_bridge PROPERTIES PREFIX "" NO_SONAME ON)
+target_link_options(arthur_bridge PRIVATE -static-libstdc++ -static-libgcc)
 
 # --- Arthur Daemon ---
 add_executable(arthur-daemon arthur-daemon.cpp)

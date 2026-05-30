@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <atomic>
 #include <pluginterfaces/vst/ivstattributes.h>
 
 namespace arthur {
@@ -26,7 +27,7 @@ public:
     WaylandAttributeList(Steinberg::Vst::IAttributeList* host_list);
     virtual ~WaylandAttributeList();
 
-    // IUnknown methods (Delegated to host_list)
+    // IUnknown methods (Proper COM reference counting)
     Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID _iid, void** obj) override;
     Steinberg::uint32 PLUGIN_API addRef() override;
     Steinberg::uint32 PLUGIN_API release() override;
@@ -42,6 +43,7 @@ public:
     Steinberg::tresult PLUGIN_API getBinary(AttrID id, const void*& data, Steinberg::uint32& sizeInBytes) override;
 
 private:
+    std::atomic<uint32_t> ref_count;
     Steinberg::Vst::IAttributeList* host_list_;
 };
 

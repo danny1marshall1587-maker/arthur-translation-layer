@@ -66,8 +66,9 @@ case "$OS_ID" in
 esac
 
 # 4. User Group Membership
+TARGET_USER="${SUDO_USER:-$(logname 2>/dev/null || echo $USER)}"
 if [ "$DRY_RUN" = true ]; then
-    echo "=> [PROPOSED] Add current user ($SUDO_USER) to group: $AUDIO_GROUP"
+    echo "=> [PROPOSED] Add current user ($TARGET_USER) to group: $AUDIO_GROUP"
 else
     # Create group if it doesn't exist
     if ! getent group "$AUDIO_GROUP" >/dev/null; then
@@ -75,10 +76,10 @@ else
         groupadd "$AUDIO_GROUP"
     fi
     # Add user
-    if [ ! -z "$SUDO_USER" ]; then
-        echo "Adding user $SUDO_USER to group $AUDIO_GROUP..."
-        usermod -aG "$AUDIO_GROUP" "$SUDO_USER"
-        echo "[OK] User $SUDO_USER is now a member of $AUDIO_GROUP."
+    if [ ! -z "$TARGET_USER" ] && [ "$TARGET_USER" != "root" ]; then
+        echo "Adding user $TARGET_USER to group $AUDIO_GROUP..."
+        usermod -aG "$AUDIO_GROUP" "$TARGET_USER"
+        echo "[OK] User $TARGET_USER is now a member of $AUDIO_GROUP."
     fi
 fi
 

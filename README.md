@@ -100,6 +100,51 @@ This runs automated scenarios checking both the 5-second graceful timeout on mis
               └────────────────────────────┘
 ```
 
+---
+
+## Phase 3: Unflappable Timing Sync & Virtualized CPU DSP Cores (v4.0.0)
+
+We have successfully finalized the low-latency phase-alignment, virtual hybrid console routing, and system performance optimizations:
+
+### 1. Multi-Device CLLS Aggregation & Drift Compensation
+To allow combining multiple audio interfaces with sample-accurate phase locking (software-based wordclock) without clock drift or clicks:
+* **Decentralized Coordination (`/dev/shm/arthur_clls_sync`)**: Allocates a secure [CLLSSyncLayout](file:///home/dan/audos/AudioIPC.h) tracking the measured RTT of each device.
+* **Frozen Timing Horizon**: The first device or VST3 bridge instance that detects active measurements calculates a stable target latency ($T = \max(L_{\text{active}}) + 128.0\text{ samples}$) and freezes it inside the shared `global_target_rtt` atomic field.
+* **Lagrange Fractional Interpolation**: All active plugins ([main.cpp](file:///home/dan/audos/main.cpp)) read this identical shared target, dynamically computing the compensation delay ($D_i(t) = T - L_i(t)$) and applying a 3rd-order Lagrange fractional delay line in real-time. This dynamically absorbs clock drift with sub-sample precision.
+* **ALSA MIDI Synchronization**: The MIDI sync daemon ([midi_sync.cpp](file:///home/dan/audos/midi_sync.cpp)) pre-compensates outgoing events slaved to the exact same `global_target_rtt` to eliminate scheduling jitter.
+
+### 2. Inline Virtual Hybrid Console (VHC) Routing
+Allows seamless switching of console channels between tracking (zero-latency monitoring) and mixing (DAW playback) without duplicating plugin instances:
+* **console_mode**: The shared memory segment tracks channel states (0 = Playback, 1 = Record Dry / Monitor Wet, 2 = Record Wet).
+* **Record Dry / Monitor Wet (`MODE_RECORD_DRY_MONITOR_WET`)**: Routes physical input signals dry directly to the DAW's main output buffers for recording, while simultaneously streaming the processed wet monitor audio to the auxiliary `Monitor Output` VST3 bus for the performer.
+* **Playback Pool (`MODE_PLAYBACK`)**: Reroutes DAW track playback buffers directly back through the same console insert slot during mixing.
+
+### 3. Single-PCI Multiplexed VDC (Virtual DSP Cores)
+* Employs a single 256MB shared memory file (`/arthur_vdc_multiplex`) partitioned into 128 dynamic slots at 2MB strides.
+* The daemon ([arthur-daemon.cpp](file:///home/dan/audos/arthur-daemon.cpp)) handles thread-safe allocation and placement-new initialization of slots, passing slot indices and strides directly to spawned guest processes.
+* **Version Validation**: The guest agent ([win_guest_agent.cpp](file:///home/dan/audos/win_guest_agent.cpp)) validates the mapped memory layout against `AudioSharedMemory::SHM_VERSION` to prevent layout corruption.
+
+### 4. CachyOS Performance Auto-Tuning
+Arthur is fully optimized to run on **CachyOS** (or standard Arch Linux) using our specialized performance tuning script:
+```bash
+sudo ./arthur_tune_cachyos.sh
+```
+This automates the entire system configuration:
+1. **Core Isolation**: Inserts kernel boot parameters (`isolcpus=4-7 nohz_full=4-7 rcu_nocbs=4-7`) in systemd-boot or GRUB to dedicate cores 4–7 strictly to real-time audio threads.
+2. **Real-time Priorities**: Configures limits for the `audio` and `realtime` groups (`rtprio 98` and `memlock unlimited`).
+3. **PipeWire Realtime Limits**: Copies and modifies PipeWire `client.conf` and `jack.conf` templates to set `rt.prio = 95` and allow unconstrained memory locks.
+4. **Bridge Auto-Linking**: Installs the native bridge loader (`arthur_bridge.so`) into user `~/.vst3/`.
+
+### 5. Flatpak sandbox configuration
+The Flatpak manifest (`org.arthur.TranslationLayer.json`) packages the entire app bundle (GUI, Daemon, VM, Wine dependencies) as a sandboxed desktop application. To enable zero-latency IPC and hardware virtualization acceleration, it is configured with:
+* `--device=kvm` (Hardware virtualization speed)
+* `--filesystem=xdg-run/shm` (Host/Guest shared memory)
+* `--filesystem=host` (Auto-writing bridged `.so` files to `~/.vst3/`)
+* `--share=ipc` (UNIX socket communication)
+
+---
+
 ## License
 
 MIT — Built on the [MIT-licensed VST3 SDK](https://github.com/steinbergmedia/vst3sdk).
+
