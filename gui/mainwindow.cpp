@@ -2201,6 +2201,72 @@ void MainWindow::handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitSta
     updateGlobalStatus("✓ CLLS Finished", QString("CLLS Calibration Slot %1 finished.").arg(slotIdx + 1), true);
 }
 
+static QString getFriendlyPortName(const QString &portName, const QString &interfaceName) {
+    bool isEvo4 = interfaceName.contains("EVO4", Qt::CaseInsensitive) || interfaceName.contains("EVO_4", Qt::CaseInsensitive);
+    bool isEvo8 = interfaceName.contains("EVO8", Qt::CaseInsensitive) || interfaceName.contains("EVO_8", Qt::CaseInsensitive);
+    bool isEvo = isEvo4 || isEvo8 || interfaceName.contains("Audient", Qt::CaseInsensitive);
+
+    int colonIdx = portName.indexOf(':');
+    QString rawName = (colonIdx != -1) ? portName.mid(colonIdx + 1) : portName;
+
+    if (isEvo) {
+        if (rawName.startsWith("playback_AUX")) {
+            int idx = rawName.mid(12).toInt();
+            if (isEvo4) {
+                if (idx == 0) return QString("%1 (Main Out 1)").arg(rawName);
+                if (idx == 1) return QString("%1 (Main Out 2)").arg(rawName);
+                if (idx == 2) return QString("%1 (Loopback Out 1)").arg(rawName);
+                if (idx == 3) return QString("%1 (Loopback Out 2)").arg(rawName);
+            } else if (isEvo8) {
+                if (idx == 0) return QString("%1 (Main Out 1)").arg(rawName);
+                if (idx == 1) return QString("%1 (Main Out 2)").arg(rawName);
+                if (idx == 2) return QString("%1 (Line Out 3)").arg(rawName);
+                if (idx == 3) return QString("%1 (Line Out 4)").arg(rawName);
+                if (idx == 4) return QString("%1 (Loopback Out 1)").arg(rawName);
+                if (idx == 5) return QString("%1 (Loopback Out 2)").arg(rawName);
+            } else {
+                if (idx < 2) return QString("%1 (Main Out %2)").arg(rawName).arg(idx + 1);
+                return QString("%1 (Aux/Loopback %2)").arg(rawName).arg(idx - 1);
+            }
+        }
+        if (rawName.startsWith("capture_AUX")) {
+            int idx = rawName.mid(11).toInt();
+            if (isEvo4) {
+                if (idx == 0) return QString("%1 (Mic/Line 1)").arg(rawName);
+                if (idx == 1) return QString("%1 (Mic/Line 2)").arg(rawName);
+                if (idx == 2) return QString("%1 (Loopback In 1)").arg(rawName);
+                if (idx == 3) return QString("%1 (Loopback In 2)").arg(rawName);
+            } else if (isEvo8) {
+                if (idx == 0) return QString("%1 (Mic/Line 1)").arg(rawName);
+                if (idx == 1) return QString("%1 (Mic/Line 2)").arg(rawName);
+                if (idx == 2) return QString("%1 (Mic/Line 3)").arg(rawName);
+                if (idx == 3) return QString("%1 (Mic/Line 4)").arg(rawName);
+                if (idx == 4) return QString("%1 (Loopback In 1)").arg(rawName);
+                if (idx == 5) return QString("%1 (Loopback In 2)").arg(rawName);
+            } else {
+                if (idx < 2) return QString("%1 (Input %2)").arg(rawName).arg(idx + 1);
+                return QString("%1 (Loopback %2)").arg(rawName).arg(idx - 1);
+            }
+        }
+        if (rawName.startsWith("monitor_AUX")) {
+            int idx = rawName.mid(11).toInt();
+            if (isEvo4) {
+                if (idx == 0) return QString("%1 (Main Out 1 Mon)").arg(rawName);
+                if (idx == 1) return QString("%1 (Main Out 2 Mon)").arg(rawName);
+                if (idx == 2) return QString("%1 (Loopback Out 1 Mon)").arg(rawName);
+                if (idx == 3) return QString("%1 (Loopback Out 2 Mon)").arg(rawName);
+            }
+        }
+    }
+
+    if (rawName == "playback_FL" || rawName == "playback_L") return QString("%1 (Left)").arg(rawName);
+    if (rawName == "playback_FR" || rawName == "playback_R") return QString("%1 (Right)").arg(rawName);
+    if (rawName == "capture_FL" || rawName == "capture_L") return QString("%1 (Left)").arg(rawName);
+    if (rawName == "capture_FR" || rawName == "capture_R") return QString("%1 (Right)").arg(rawName);
+
+    return rawName;
+}
+
 void MainWindow::populatePortsForSlot(int slotIdx) {
     if (slotIdx < 0 || slotIdx >= 3) return;
     CllsSlot &slot = m_cllsSlots[slotIdx];
@@ -2220,24 +2286,18 @@ void MainWindow::populatePortsForSlot(int slotIdx) {
         for (const QString &port : allPorts) {
             // Playback Ports
             if (port.startsWith(activeInterface) && port.contains("playback")) {
-                QString displayName = port;
-                int colonIdx = port.indexOf(':');
-                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                QString displayName = getFriendlyPortName(port, activeInterface);
                 slot.playbackPortSelect->addItem(displayName, port);
             }
             // Capture (physical mic/line) Ports
             if (port.startsWith(inputInterface) && port.contains("capture")) {
-                QString displayName = port;
-                int colonIdx = port.indexOf(':');
-                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
+                QString displayName = getFriendlyPortName(port, inputInterface);
                 slot.capturePortSelect->addItem(displayName, port);
             }
             // Monitor (loopback) Ports
             if (port.startsWith(activeInterface) && port.contains("monitor")) {
-                QString displayName = port;
-                int colonIdx = port.indexOf(':');
-                if (colonIdx != -1) displayName = port.mid(colonIdx + 1);
-                slot.capturePortSelect->addItem(displayName + " (Loopback)", port);
+                QString displayName = getFriendlyPortName(port, activeInterface);
+                slot.capturePortSelect->addItem(displayName + " (Loopback Monitor)", port);
             }
         }
     }
