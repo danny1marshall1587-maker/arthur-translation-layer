@@ -79,6 +79,10 @@ private slots:
     void readTuningOutput();
     void handleTuningFinished(int exitCode, QProcess::ExitStatus status);
     void updateMeterAnimations();
+    void switchConsolePage(int pageIdx);
+    void loadPlugin(int slotIdx);
+    void unloadPlugin(int slotIdx);
+    void openPluginGui(int slotIdx);
 
 private:
     void initUi();
@@ -124,9 +128,25 @@ private:
     };
     QList<ConsoleBusRow> m_consoleBusses;
 
+    QStackedWidget *m_consoleStack = nullptr;
+    QPushButton *m_btnInputsPage = nullptr;
+    QPushButton *m_btnBussesPage = nullptr;
+    QPushButton *m_btnInstrumentsPage = nullptr;
+
     QWidget *m_consoleChannelContainer = nullptr;
     QWidget *m_consoleBussesContainer = nullptr;
     QPushButton *m_consoleScanBtn = nullptr;
+
+    struct InstrumentSlotRow {
+        QLabel *slotLabel = nullptr;
+        QLabel *statusDot = nullptr;
+        QLabel *statusText = nullptr;
+        QComboBox *pluginSelect = nullptr;
+        QPushButton *loadBtn = nullptr;
+        QPushButton *guiBtn = nullptr;
+        QString shmName;
+    };
+    QList<InstrumentSlotRow> m_instrumentSlots;
 
     void rebuildConsoleChannels();
     void applyChannelMode(int rowIdx, int mode);
@@ -164,6 +184,8 @@ private:
         QComboBox *interfaceSelect = nullptr;
         QComboBox *playbackPortSelect = nullptr;
         QComboBox *capturePortSelect = nullptr;
+        QComboBox *audioSrcSelect = nullptr;
+        QComboBox *audioDstSelect = nullptr;
         QPushButton *runBtn = nullptr;
         QLabel *statusBadge = nullptr;
         QLabel *rttValLabel = nullptr;

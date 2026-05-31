@@ -552,6 +552,51 @@ void handle_client(int client_fd) {
         }
         if (resp.empty()) resp = "";
         send(client_fd, resp.c_str(), resp.length(), 0);
+    } else if (cmd.find("LIST_PLUGINS") == 0) {
+        // Return newline-separated list of all active plugins with their SHM names
+        std::lock_guard<std::mutex> lock(plugins_mutex);
+        std::string resp;
+        for (auto &kv : active_plugins) {
+            resp += kv.first + " " + kv.second.plugin_name + "\n";
+        }
+        if (resp.empty()) resp = "";
+        send(client_fd, resp.c_str(), resp.length(), 0);
+    } else if (cmd.find("OPEN_EDITOR") == 0 || cmd.find("CLOSE_EDITOR") == 0) {
+        // OPEN_EDITOR <shm_name> / CLOSE_EDITOR <shm_name>
+        bool open = (cmd.find("OPEN_EDITOR") == 0);
+        std::istringstream ss(cmd);
+        std::string token, shm_name;
+        ss >> token >> shm_name;
+        if (shm_name.empty()) {
+            std::string resp = "ERROR: Bad command args";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+        } else {
+            std::string full_shm = "/" + shm_name;
+            int fd = shm_open(full_shm.c_str(), O_RDWR, 0600);
+            if (fd < 0) {
+                std::string resp = "ERROR: shm_open failed for " + shm_name;
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            } else {
+                void *ptr = mmap(nullptr, sizeof(arthur::AudioSharedMemory),
+                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                close(fd);
+                if (ptr == MAP_FAILED) {
+                    std::string resp = "ERROR: mmap failed";
+                    send(client_fd, resp.c_str(), resp.length(), 0);
+                } else {
+                    auto *layout = reinterpret_cast<arthur::AudioSharedMemory*>(ptr);
+                    if (layout->version == arthur::AudioSharedMemory::SHM_VERSION) {
+                        layout->request_open_editor.store(open ? 1 : 0, std::memory_order_release);
+                        std::string resp = "OK";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    } else {
+                        std::string resp = "ERROR: SHM version mismatch";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    }
+                    munmap(ptr, sizeof(arthur::AudioSharedMemory));
+                }
+            }
+        }
     } else if (cmd.find("CONSOLE_MODE") == 0) {
         // CONSOLE_MODE <shm_name> <mode_0_1_2>
         // Write console_mode field in the shared memory for the named slot

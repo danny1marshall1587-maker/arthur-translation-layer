@@ -262,29 +262,29 @@ void MainWindow::setupGlobalStylesheet() {
         }
         /* Console Strip Layout & Faders/Meters */
         .console-strip {
-            background-color: rgba(20, 24, 38, 0.55);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: rgba(26, 18, 43, 0.55);
+            border: 1px solid rgba(191, 90, 242, 0.22);
             border-radius: 12px;
             min-width: 120px;
             max-width: 120px;
         }
         .console-strip:hover {
-            border-color: rgba(0, 122, 255, 0.4);
-            background-color: rgba(24, 28, 46, 0.7);
+            border-color: rgba(191, 90, 242, 0.6);
+            background-color: rgba(35, 24, 59, 0.7);
         }
         .console-strip-master {
-            background-color: rgba(28, 20, 38, 0.65);
-            border: 1px solid rgba(175, 82, 222, 0.3);
+            background-color: rgba(16, 26, 38, 0.65);
+            border: 1px solid rgba(0, 240, 255, 0.25);
             border-radius: 12px;
             min-width: 120px;
             max-width: 120px;
         }
         .console-strip-master:hover {
-            border-color: rgba(175, 82, 222, 0.7);
-            background-color: rgba(34, 24, 46, 0.85);
+            border-color: rgba(0, 240, 255, 0.65);
+            background-color: rgba(22, 36, 51, 0.8);
         }
         .btn-mute {
-            background-color: rgba(255, 255, 255, 0.08);
+            background-color: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.08);
             color: #a0a5b5;
             border-radius: 6px;
@@ -298,7 +298,7 @@ void MainWindow::setupGlobalStylesheet() {
             color: #ff453a;
         }
         .btn-solo {
-            background-color: rgba(255, 255, 255, 0.08);
+            background-color: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.08);
             color: #a0a5b5;
             border-radius: 6px;
@@ -312,30 +312,68 @@ void MainWindow::setupGlobalStylesheet() {
             color: #ffdb0a;
         }
         QSlider::groove:vertical {
-            background: rgba(255, 255, 255, 0.08);
-            width: 4px;
-            border-radius: 2px;
-        }
-        QSlider::handle:vertical {
-            background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #007aff, stop:1 #af52de);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            height: 16px;
-            width: 16px;
-            margin: 0 -6px;
-            border-radius: 8px;
-        }
-        QSlider::handle:vertical:hover {
-            background: #ffffff;
-            border-color: #007aff;
-        }
-        QProgressBar:vertical {
-            background: rgba(255, 255, 255, 0.05);
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #050308, stop:1 #1a1525);
+            border: 1px solid rgba(255, 255, 255, 0.04);
             width: 6px;
             border-radius: 3px;
         }
+        QSlider::handle:vertical {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                       stop:0 #252030, stop:0.4 #423852, stop:0.5 #bf5af2,
+                                       stop:0.6 #423852, stop:1 #252030);
+            border: 1px solid rgba(191, 90, 242, 0.85);
+            height: 28px;
+            width: 22px;
+            margin: 0 -8px;
+            border-radius: 4px;
+        }
+        QSlider::handle:vertical:hover {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                       stop:0 #322b40, stop:0.4 #594c6e, stop:0.5 #d68ff7,
+                                       stop:0.6 #594c6e, stop:1 #322b40);
+            border-color: #d68ff7;
+        }
+        QProgressBar:vertical {
+            background: rgba(255, 255, 255, 0.05);
+            width: 8px;
+            border-radius: 4px;
+        }
         QProgressBar::chunk:vertical {
-            background: qlineargradient(x1:0, y1:1, x2:0, y2:0, stop:0 #30d158, stop:0.75 #ffd60a, stop:0.95 #ff3b30);
-            border-radius: 3px;
+            background: qlineargradient(x1:0, y1:1, x2:0, y2:0,
+                                       stop:0 #7a1fa2, stop:0.7 #bf5af2, stop:1 #00f0ff);
+            border-radius: 4px;
+        }
+        QDial {
+            background-color: #110c1f;
+            border: 2px solid rgba(191, 90, 242, 0.35);
+            border-radius: 16px;
+        }
+        .console-tab-btn {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            color: #a0a5b5;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 6px 16px;
+        }
+        .console-tab-btn:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+        .console-tab-btn[active="true"] {
+            background-color: rgba(191, 90, 242, 0.15);
+            border-color: #bf5af2;
+            color: #bf5af2;
+        }
+        .instrument-slot-card {
+            background-color: rgba(26, 18, 43, 0.55);
+            border: 1px solid rgba(191, 90, 242, 0.25);
+            border-radius: 12px;
+        }
+        .instrument-slot-card:hover {
+            border-color: rgba(191, 90, 242, 0.55);
+            background-color: rgba(35, 24, 59, 0.7);
         }
     )";
     setStyleSheet(style);
@@ -819,6 +857,10 @@ void MainWindow::initUi() {
     hOut->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
     QLabel *hIn = new QLabel("Capture (In)", cllsTimingsCard);
     hIn->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hAudioSrc = new QLabel("Audio Src (L/R)", cllsTimingsCard);
+    hAudioSrc->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
+    QLabel *hAudioDst = new QLabel("Audio Dst (L/R)", cllsTimingsCard);
+    hAudioDst->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
     QLabel *hAction = new QLabel("Action", cllsTimingsCard);
     hAction->setStyleSheet("font-weight: 800; color: #a0a5b5; font-size: 11px;");
     QLabel *hStatus = new QLabel("Latency", cllsTimingsCard);
@@ -830,9 +872,11 @@ void MainWindow::initUi() {
     cllsGrid->addWidget(hInterface, 0, 1);
     cllsGrid->addWidget(hOut, 0, 2);
     cllsGrid->addWidget(hIn, 0, 3);
-    cllsGrid->addWidget(hAction, 0, 4);
-    cllsGrid->addWidget(hStatus, 0, 5);
-    cllsGrid->addWidget(hLink, 0, 6);
+    cllsGrid->addWidget(hAudioSrc, 0, 4);
+    cllsGrid->addWidget(hAudioDst, 0, 5);
+    cllsGrid->addWidget(hAction, 0, 6);
+    cllsGrid->addWidget(hStatus, 0, 7);
+    cllsGrid->addWidget(hLink, 0, 8);
 
     for (int i = 0; i < 3; ++i) {
         QLabel *slotLabel = new QLabel(QString("Slot %1").arg(i + 1), cllsTimingsCard);
@@ -850,6 +894,14 @@ void MainWindow::initUi() {
         m_cllsSlots[i].capturePortSelect = new QComboBox(cllsTimingsCard);
         m_cllsSlots[i].capturePortSelect->setProperty("class", "custom-select");
         m_cllsSlots[i].capturePortSelect->setMinimumWidth(70);
+
+        m_cllsSlots[i].audioSrcSelect = new QComboBox(cllsTimingsCard);
+        m_cllsSlots[i].audioSrcSelect->setProperty("class", "custom-select");
+        m_cllsSlots[i].audioSrcSelect->setMinimumWidth(80);
+
+        m_cllsSlots[i].audioDstSelect = new QComboBox(cllsTimingsCard);
+        m_cllsSlots[i].audioDstSelect->setProperty("class", "custom-select");
+        m_cllsSlots[i].audioDstSelect->setMinimumWidth(80);
 
         m_cllsSlots[i].runBtn = new QPushButton("Run", cllsTimingsCard);
         m_cllsSlots[i].runBtn->setProperty("class", "action-btn");
@@ -869,9 +921,11 @@ void MainWindow::initUi() {
         cllsGrid->addWidget(m_cllsSlots[i].interfaceSelect, i + 1, 1);
         cllsGrid->addWidget(m_cllsSlots[i].playbackPortSelect, i + 1, 2);
         cllsGrid->addWidget(m_cllsSlots[i].capturePortSelect, i + 1, 3);
-        cllsGrid->addWidget(m_cllsSlots[i].runBtn, i + 1, 4);
-        cllsGrid->addWidget(m_cllsSlots[i].rttValLabel, i + 1, 5);
-        cllsGrid->addWidget(m_cllsSlots[i].statusBadge, i + 1, 6);
+        cllsGrid->addWidget(m_cllsSlots[i].audioSrcSelect, i + 1, 4);
+        cllsGrid->addWidget(m_cllsSlots[i].audioDstSelect, i + 1, 5);
+        cllsGrid->addWidget(m_cllsSlots[i].runBtn, i + 1, 6);
+        cllsGrid->addWidget(m_cllsSlots[i].rttValLabel, i + 1, 7);
+        cllsGrid->addWidget(m_cllsSlots[i].statusBadge, i + 1, 8);
 
         // Connect interface select change to populate ports and auto-save
         connect(m_cllsSlots[i].interfaceSelect, &QComboBox::currentIndexChanged, this, [=]() {
@@ -884,6 +938,12 @@ void MainWindow::initUi() {
             saveAudioConfig();
         });
         connect(m_cllsSlots[i].capturePortSelect, &QComboBox::currentIndexChanged, this, [=]() {
+            saveAudioConfig();
+        });
+        connect(m_cllsSlots[i].audioSrcSelect, &QComboBox::currentIndexChanged, this, [=]() {
+            saveAudioConfig();
+        });
+        connect(m_cllsSlots[i].audioDstSelect, &QComboBox::currentIndexChanged, this, [=]() {
             saveAudioConfig();
         });
 
@@ -1008,9 +1068,12 @@ void MainWindow::initUi() {
     // =========================================================================
     // Stack 5: VHC Console Tab
     // =========================================================================
+    // =========================================================================
+    // Stack 5: VHC Console Tab
+    // =========================================================================
     m_consoleTab = new QWidget(this);
     QVBoxLayout *consLayout = new QVBoxLayout(m_consoleTab);
-    consLayout->setSpacing(10);
+    consLayout->setSpacing(8);
     consLayout->setContentsMargins(10, 10, 10, 10);
 
     QLabel *consTitle = new QLabel("Virtual Hybrid Console (VHC)", m_consoleTab);
@@ -1020,8 +1083,45 @@ void MainWindow::initUi() {
     consLayout->addWidget(consTitle);
     consLayout->addWidget(consSub);
 
+    // Sub-navigation bar for Console Pages
+    QFrame *consoleSubNav = new QFrame(m_consoleTab);
+    consoleSubNav->setStyleSheet("background-color: transparent;");
+    QHBoxLayout *subNavLayout = new QHBoxLayout(consoleSubNav);
+    subNavLayout->setContentsMargins(0, 0, 0, 5);
+    subNavLayout->setSpacing(8);
+
+    m_btnInputsPage = new QPushButton("Inputs Mixer", consoleSubNav);
+    m_btnInputsPage->setProperty("class", "console-tab-btn");
+    m_btnInputsPage->setProperty("active", true);
+    m_btnInputsPage->setCursor(Qt::PointingHandCursor);
+
+    m_btnBussesPage = new QPushButton("Busses & Sends", consoleSubNav);
+    m_btnBussesPage->setProperty("class", "console-tab-btn");
+    m_btnBussesPage->setProperty("active", false);
+    m_btnBussesPage->setCursor(Qt::PointingHandCursor);
+
+    m_btnInstrumentsPage = new QPushButton("Instruments & Plugins", consoleSubNav);
+    m_btnInstrumentsPage->setProperty("class", "console-tab-btn");
+    m_btnInstrumentsPage->setProperty("active", false);
+    m_btnInstrumentsPage->setCursor(Qt::PointingHandCursor);
+
+    subNavLayout->addWidget(m_btnInputsPage);
+    subNavLayout->addWidget(m_btnBussesPage);
+    subNavLayout->addWidget(m_btnInstrumentsPage);
+    subNavLayout->addStretch();
+    consLayout->addWidget(consoleSubNav);
+
+    // Create the stacked widget
+    m_consoleStack = new QStackedWidget(m_consoleTab);
+
+    // ==================== PAGE 1: Inputs Mixer Page ====================
+    QWidget *inputsPage = new QWidget();
+    QVBoxLayout *inputsPageLayout = new QVBoxLayout(inputsPage);
+    inputsPageLayout->setContentsMargins(0, 0, 0, 0);
+    inputsPageLayout->setSpacing(8);
+
     // Info card explaining the three modes
-    QFrame *modeInfoCard = new QFrame(m_consoleTab);
+    QFrame *modeInfoCard = new QFrame(inputsPage);
     modeInfoCard->setProperty("class", "card");
     QHBoxLayout *modeInfoLayout = new QHBoxLayout(modeInfoCard);
     modeInfoLayout->setSpacing(20);
@@ -1046,10 +1146,10 @@ void MainWindow::initUi() {
     modeInfoLayout->addLayout(makeModeInfo("▶", "Playback (Mode 0)", "Processed wet signal sent to main output. Default mode for normal playback.", "rgba(0,122,255,0.12)"));
     modeInfoLayout->addLayout(makeModeInfo("⏺", "Dry+Monitor (Mode 1)", "Raw dry input sent to DAW for recording. Wet signal routed to monitor bus so you still hear effects.", "rgba(255,149,0,0.12)"));
     modeInfoLayout->addLayout(makeModeInfo("⏺", "Record Wet (Mode 2)", "Processed wet signal sent directly to DAW main output for recording. Bakes effects in.", "rgba(255,59,48,0.12)"));
-    consLayout->addWidget(modeInfoCard);
+    inputsPageLayout->addWidget(modeInfoCard);
 
     // Scan Button Header
-    QFrame *scanHeader = new QFrame(m_consoleTab);
+    QFrame *scanHeader = new QFrame(inputsPage);
     scanHeader->setProperty("class", "card");
     QHBoxLayout *scanHeaderLayout = new QHBoxLayout(scanHeader);
     scanHeaderLayout->setContentsMargins(15, 10, 15, 10);
@@ -1062,15 +1162,10 @@ void MainWindow::initUi() {
     scanHeaderLayout->addWidget(scanLabel);
     scanHeaderLayout->addStretch();
     scanHeaderLayout->addWidget(m_consoleScanBtn);
-    consLayout->addWidget(scanHeader);
-
-    // Horizontal layout for mixer (channels on left, busses on right)
-    QHBoxLayout *mixerLayout = new QHBoxLayout();
-    mixerLayout->setSpacing(10);
-    mixerLayout->setContentsMargins(0, 0, 0, 0);
+    inputsPageLayout->addWidget(scanHeader);
 
     // Scrollable channel container
-    QScrollArea *consScrollArea = new QScrollArea(m_consoleTab);
+    QScrollArea *consScrollArea = new QScrollArea(inputsPage);
     consScrollArea->setWidgetResizable(true);
     consScrollArea->setFrameShape(QFrame::NoFrame);
     consScrollArea->setStyleSheet("background-color: transparent;");
@@ -1080,18 +1175,117 @@ void MainWindow::initUi() {
     channelsLayout->setContentsMargins(0, 0, 0, 0);
     channelsLayout->setSpacing(8);
     consScrollArea->setWidget(m_consoleChannelContainer);
-    mixerLayout->addWidget(consScrollArea, 1);
+    inputsPageLayout->addWidget(consScrollArea, 1);
 
-    // Static Busses container on the right (anchored)
-    m_consoleBussesContainer = new QWidget(m_consoleTab);
-    m_consoleBussesContainer->setFixedWidth(380);
+    // ==================== PAGE 2: Busses & Sends Mixer Page ====================
+    QWidget *bussesPage = new QWidget();
+    QVBoxLayout *bussesPageLayout = new QVBoxLayout(bussesPage);
+    bussesPageLayout->setContentsMargins(0, 0, 0, 0);
+    bussesPageLayout->setSpacing(8);
+
+    QScrollArea *bussesScrollArea = new QScrollArea(bussesPage);
+    bussesScrollArea->setWidgetResizable(true);
+    bussesScrollArea->setFrameShape(QFrame::NoFrame);
+    bussesScrollArea->setStyleSheet("background-color: transparent;");
+    m_consoleBussesContainer = new QWidget();
     m_consoleBussesContainer->setStyleSheet("background-color: transparent;");
     QHBoxLayout *bussesLayout = new QHBoxLayout(m_consoleBussesContainer);
     bussesLayout->setContentsMargins(0, 0, 0, 0);
     bussesLayout->setSpacing(8);
-    mixerLayout->addWidget(m_consoleBussesContainer);
+    bussesScrollArea->setWidget(m_consoleBussesContainer);
+    bussesPageLayout->addWidget(bussesScrollArea, 1);
 
-    consLayout->addLayout(mixerLayout, 1);
+    // ==================== PAGE 3: Instruments Rack Page ====================
+    QWidget *instrumentsPage = new QWidget();
+    QVBoxLayout *instPageLayout = new QVBoxLayout(instrumentsPage);
+    instPageLayout->setContentsMargins(0, 0, 0, 0);
+    instPageLayout->setSpacing(10);
+
+    QScrollArea *instScroll = new QScrollArea(instrumentsPage);
+    instScroll->setWidgetResizable(true);
+    instScroll->setFrameShape(QFrame::NoFrame);
+    instScroll->setStyleSheet("background-color: transparent;");
+    QWidget *instContainer = new QWidget();
+    instContainer->setStyleSheet("background-color: transparent;");
+    QGridLayout *instGrid = new QGridLayout(instContainer);
+    instGrid->setSpacing(12);
+    instGrid->setContentsMargins(5, 5, 5, 5);
+
+    QList<QString> pluginsList = scanInstalledVst3Plugins();
+
+    for (int i = 0; i < 8; ++i) {
+        InstrumentSlotRow row;
+        row.shmName = QString("ArthurAudioIPC_slot_%1").arg(i);
+
+        QFrame *slotCard = new QFrame(instContainer);
+        slotCard->setProperty("class", "instrument-slot-card");
+        QHBoxLayout *slotLayout = new QHBoxLayout(slotCard);
+        slotLayout->setContentsMargins(15, 12, 15, 12);
+        slotLayout->setSpacing(10);
+
+        row.slotLabel = new QLabel(QString("Slot %1").arg(i + 1), slotCard);
+        row.slotLabel->setStyleSheet("font-weight: 800; font-size: 13px; color: #ffffff; min-width: 50px;");
+
+        row.statusDot = new QLabel(slotCard);
+        row.statusDot->setFixedSize(8, 8);
+        row.statusDot->setStyleSheet("background-color: #a0a5b5; border-radius: 4px;");
+
+        row.statusText = new QLabel("Empty", slotCard);
+        row.statusText->setStyleSheet("color: #a0a5b5; font-size: 12px; font-weight: 600; min-width: 60px;");
+
+        row.pluginSelect = new QComboBox(slotCard);
+        row.pluginSelect->setProperty("class", "custom-select");
+        row.pluginSelect->setMinimumWidth(150);
+        row.pluginSelect->addItem("Select Plugin...", "");
+        for (const QString &pluginName : pluginsList) {
+            row.pluginSelect->addItem(pluginName, pluginName);
+        }
+
+        row.loadBtn = new QPushButton("Load", slotCard);
+        row.loadBtn->setProperty("class", "action-btn");
+        row.loadBtn->setCursor(Qt::PointingHandCursor);
+        row.loadBtn->setFixedWidth(75);
+
+        row.guiBtn = new QPushButton("GUI", slotCard);
+        row.guiBtn->setProperty("class", "settings-btn");
+        row.guiBtn->setCursor(Qt::PointingHandCursor);
+        row.guiBtn->setFixedWidth(60);
+        row.guiBtn->setVisible(false);
+
+        slotLayout->addWidget(row.slotLabel);
+        slotLayout->addWidget(row.statusDot);
+        slotLayout->addWidget(row.statusText);
+        slotLayout->addWidget(row.pluginSelect);
+        slotLayout->addWidget(row.loadBtn);
+        slotLayout->addWidget(row.guiBtn);
+        slotLayout->addStretch();
+
+        connect(row.loadBtn, &QPushButton::clicked, this, [=]() {
+            if (m_instrumentSlots[i].loadBtn->text() == "Load") {
+                loadPlugin(i);
+            } else {
+                unloadPlugin(i);
+            }
+        });
+        connect(row.guiBtn, &QPushButton::clicked, this, [=]() {
+            openPluginGui(i);
+        });
+
+        m_instrumentSlots.append(row);
+        instGrid->addWidget(slotCard, i / 2, i % 2);
+    }
+    instScroll->setWidget(instContainer);
+    instPageLayout->addWidget(instScroll);
+
+    // Add to stack
+    m_consoleStack->addWidget(inputsPage);
+    m_consoleStack->addWidget(bussesPage);
+    m_consoleStack->addWidget(instrumentsPage);
+    consLayout->addWidget(m_consoleStack, 1);
+
+    connect(m_btnInputsPage, &QPushButton::clicked, this, [=]() { switchConsolePage(0); });
+    connect(m_btnBussesPage, &QPushButton::clicked, this, [=]() { switchConsolePage(1); });
+    connect(m_btnInstrumentsPage, &QPushButton::clicked, this, [=]() { switchConsolePage(2); });
 
     m_contentArea->addWidget(m_consoleTab);
 }
@@ -1138,6 +1332,25 @@ void MainWindow::rebuildConsoleChannels() {
         }
     }
 
+    // Identify active interface capture ports
+    QStringList activeInPorts;
+    if (m_audioInterfaceSelect) {
+        QString activeOut = m_audioInterfaceSelect->currentData().toString();
+        if (!activeOut.isEmpty() && activeOut != "No audio interfaces found") {
+            QString activeIn = activeOut;
+            activeIn.replace("alsa_output", "alsa_input");
+            activeIn.replace("output", "input");
+
+            QList<QString> allPorts = queryPipeWirePorts();
+            for (const QString &port : allPorts) {
+                if (port.startsWith(activeIn + ":") && port.contains("capture")) {
+                    activeInPorts.append(port);
+                }
+            }
+        }
+    }
+    activeInPorts.sort();
+
     // Discover active SHM slots via arthur-daemon
     QStringList shmNames;
     QString response = "";
@@ -1167,19 +1380,29 @@ void MainWindow::rebuildConsoleChannels() {
             shmNames.append(entry);
         }
     }
+    shmNames.sort();
+
+    // Combine active physical inputs and virtual channels
+    QStringList allChannels;
+    for (const QString &p : activeInPorts) {
+        allChannels.append(p);
+    }
+    for (const QString &s : shmNames) {
+        allChannels.append(s);
+    }
 
     QHBoxLayout *cl = qobject_cast<QHBoxLayout*>(m_consoleChannelContainer->layout());
 
-    if (shmNames.isEmpty()) {
+    if (allChannels.isEmpty()) {
         QLabel *emptyLabel = new QLabel("No active Arthur channels.\nLoad plugins or DAW.", m_consoleChannelContainer);
         emptyLabel->setAlignment(Qt::AlignCenter);
         emptyLabel->setStyleSheet("color: #a0a5b5; font-size: 12px; margin: 40px;");
         if (cl) cl->addWidget(emptyLabel);
     } else {
         int rowIdx = 0;
-        for (const QString &shmName : shmNames) {
+        for (const QString &chName : allChannels) {
             ConsoleChannelRow row;
-            row.shmName = shmName;
+            row.shmName = chName;
 
             QFrame *strip = new QFrame(m_consoleChannelContainer);
             strip->setProperty("class", "console-strip");
@@ -1187,12 +1410,35 @@ void MainWindow::rebuildConsoleChannels() {
             sl->setContentsMargins(8, 10, 8, 10);
             sl->setSpacing(8);
 
-            // Channel Label (short name)
-            QString shortName = shmName;
-            if (shortName.startsWith("ArthurAudioIPC_")) {
-                shortName = "CH " + shortName.mid(15);
+            // Channel Label (friendly name)
+            QString friendlyName = chName;
+            bool isPhysical = chName.startsWith("alsa_input.");
+            if (isPhysical) {
+                friendlyName = chName.section(':', -1);
+                if (friendlyName.startsWith("capture_")) {
+                    QString suffix = friendlyName.mid(8);
+                    if (suffix.startsWith("AUX")) {
+                        bool ok;
+                        int num = suffix.mid(3).toInt(&ok);
+                        if (ok) {
+                            friendlyName = QString("EVO IN %1").arg(num + 1);
+                        } else {
+                            friendlyName = "EVO " + suffix;
+                        }
+                    } else if (suffix == "FL" || suffix == "L") {
+                        friendlyName = "EVO IN L";
+                    } else if (suffix == "FR" || suffix == "R") {
+                        friendlyName = "EVO IN R";
+                    } else {
+                        friendlyName = "EVO IN " + suffix;
+                    }
+                }
+            } else {
+                if (friendlyName.startsWith("ArthurAudioIPC_")) {
+                    friendlyName = "CH " + friendlyName.mid(15);
+                }
             }
-            row.nameLabel = new QLabel(shortName, strip);
+            row.nameLabel = new QLabel(friendlyName, strip);
             row.nameLabel->setAlignment(Qt::AlignCenter);
             row.nameLabel->setStyleSheet("font-weight: 800; font-size: 12px; color: #ffffff;");
             sl->addWidget(row.nameLabel);
@@ -1205,6 +1451,10 @@ void MainWindow::rebuildConsoleChannels() {
             row.modeSelect->addItem("IN Rec Wet", 2);
             row.modeSelect->setStyleSheet("font-size: 10px; padding: 2px 4px;");
             sl->addWidget(row.modeSelect);
+
+            if (isPhysical) {
+                row.modeSelect->setVisible(false);
+            }
 
             // Send Knobs Row (Reverb & Delay side-by-side)
             QHBoxLayout *sendsLayout = new QHBoxLayout();
@@ -1301,16 +1551,28 @@ void MainWindow::rebuildConsoleChannels() {
     }
     if (cl) cl->addStretch();
 
-    // 3. Populate 3 Static Busses in m_consoleBussesContainer
+    // 3. Populate 8 Busses + 8 Sends + Master Bus in m_consoleBussesContainer
     QHBoxLayout *bl = qobject_cast<QHBoxLayout*>(m_consoleBussesContainer->layout());
     
-    QStringList busNames = {"Aux 1: Reverb", "Aux 2: Delay", "Master Bus"};
-    for (int i = 0; i < 3; ++i) {
+    QStringList busNames;
+    for (int i = 1; i <= 8; ++i) {
+        busNames.append(QString("Bus %1").arg(i));
+    }
+    for (int i = 1; i <= 8; ++i) {
+        busNames.append(QString("Send %1").arg(i));
+    }
+    busNames.append("Master Bus");
+
+    for (int i = 0; i < busNames.size(); ++i) {
         ConsoleBusRow bus;
         bus.name = busNames[i];
 
         QFrame *strip = new QFrame(m_consoleBussesContainer);
-        strip->setProperty("class", "console-strip-master");
+        if (bus.name == "Master Bus") {
+            strip->setProperty("class", "console-strip-master");
+        } else {
+            strip->setProperty("class", "console-strip");
+        }
         QVBoxLayout *sl = new QVBoxLayout(strip);
         sl->setContentsMargins(8, 10, 8, 10);
         sl->setSpacing(8);
@@ -1318,7 +1580,11 @@ void MainWindow::rebuildConsoleChannels() {
         // Name label
         QLabel *lbl = new QLabel(bus.name, strip);
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet("font-weight: 800; font-size: 11px; color: #af52de;");
+        if (bus.name == "Master Bus") {
+            lbl->setStyleSheet("font-weight: 800; font-size: 11px; color: #00f0ff;");
+        } else {
+            lbl->setStyleSheet("font-weight: 800; font-size: 11px; color: #af52de;");
+        }
         sl->addWidget(lbl);
 
         // Spacer to align faders vertically
@@ -1367,6 +1633,7 @@ void MainWindow::rebuildConsoleChannels() {
 void MainWindow::applyChannelMode(int rowIdx, int mode) {
     if (rowIdx < 0 || rowIdx >= m_consoleRows.size()) return;
     ConsoleChannelRow &row = m_consoleRows[rowIdx];
+    if (row.shmName.startsWith("alsa_input.")) return;
 
     // Write console_mode to the SHM segment for this channel
     // Use daemon command for safety - daemon validates and writes the SHM field
@@ -1614,6 +1881,71 @@ void MainWindow::querySystemStatus() {
         }
     }
 
+    // Query LIST_PLUGINS via arthur-daemon (with fast timeout)
+    QString pluginsResponse = "";
+    QLocalSocket pluginSock;
+    pluginSock.connectToServer(sockPath);
+    if (pluginSock.waitForConnected(200)) {
+        pluginSock.write("LIST_PLUGINS\n");
+        pluginSock.flush();
+        pluginSock.waitForReadyRead(300);
+        pluginsResponse = QString::fromUtf8(pluginSock.readAll()).trimmed();
+        pluginSock.disconnectFromServer();
+    }
+
+    // Map of loaded plugin names by SHM name
+    QMap<QString, QString> loadedPlugins;
+    if (!pluginsResponse.isEmpty() && !pluginsResponse.startsWith("ERROR")) {
+        QStringList lines = pluginsResponse.split('\n', Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+            QStringList parts = line.split(' ', Qt::SkipEmptyParts);
+            if (parts.size() >= 2) {
+                loadedPlugins[parts[0]] = parts[1];
+            } else if (parts.size() == 1) {
+                loadedPlugins[parts[0]] = "VST3 Plugin";
+            }
+        }
+    }
+
+    // Update Instrument Rack slots UI
+    for (int i = 0; i < m_instrumentSlots.size(); ++i) {
+        InstrumentSlotRow &row = m_instrumentSlots[i];
+        if (loadedPlugins.contains(row.shmName)) {
+            QString pluginName = loadedPlugins[row.shmName];
+            row.statusDot->setStyleSheet("background-color: #30d158; border-radius: 4px;"); // green
+            row.statusText->setText(pluginName);
+            row.statusText->setStyleSheet("color: #30d158; font-size: 12px; font-weight: 600; min-width: 100px;");
+            
+            row.pluginSelect->blockSignals(true);
+            int idx = row.pluginSelect->findData(pluginName);
+            if (idx >= 0) {
+                row.pluginSelect->setCurrentIndex(idx);
+            } else {
+                row.pluginSelect->addItem(pluginName, pluginName);
+                row.pluginSelect->setCurrentIndex(row.pluginSelect->count() - 1);
+            }
+            row.pluginSelect->setEnabled(false);
+            row.pluginSelect->blockSignals(false);
+
+            row.loadBtn->setText("Unload");
+            row.loadBtn->setStyleSheet("background: #ff3b30; border: none; border-radius: 8px; color: white; font-weight: 600; padding: 8px 15px;");
+            row.guiBtn->setVisible(true);
+        } else {
+            row.statusDot->setStyleSheet("background-color: #a0a5b5; border-radius: 4px;"); // gray
+            row.statusText->setText("Empty");
+            row.statusText->setStyleSheet("color: #a0a5b5; font-size: 12px; font-weight: 600; min-width: 100px;");
+
+            row.pluginSelect->blockSignals(true);
+            row.pluginSelect->setCurrentIndex(0);
+            row.pluginSelect->setEnabled(true);
+            row.pluginSelect->blockSignals(false);
+
+            row.loadBtn->setText("Load");
+            row.loadBtn->setStyleSheet("");
+            row.guiBtn->setVisible(false);
+        }
+    }
+
     // Sort to make sure comparison is independent of order
     currentShms.sort();
     QStringList lastScannedSorted = m_lastScannedShms;
@@ -1763,6 +2095,8 @@ void MainWindow::loadAudioConfig() {
                     QJsonObject slotSavedObj = cllsArray[i].toObject();
                     QString playbackPort = slotSavedObj["playback_port"].toString();
                     QString capturePort = slotSavedObj["capture_port"].toString();
+                    QString audioSrc = slotSavedObj["audio_src"].toString();
+                    QString audioDst = slotSavedObj["audio_dst"].toString();
 
                     if (!playbackPort.isEmpty() && m_cllsSlots[i].playbackPortSelect) {
                         m_cllsSlots[i].playbackPortSelect->blockSignals(true);
@@ -1779,6 +2113,22 @@ void MainWindow::loadAudioConfig() {
                             m_cllsSlots[i].capturePortSelect->setCurrentIndex(cIdx);
                         }
                         m_cllsSlots[i].capturePortSelect->blockSignals(false);
+                    }
+                    if (!audioSrc.isEmpty() && m_cllsSlots[i].audioSrcSelect) {
+                        m_cllsSlots[i].audioSrcSelect->blockSignals(true);
+                        int sIdx = m_cllsSlots[i].audioSrcSelect->findData(audioSrc);
+                        if (sIdx >= 0) {
+                            m_cllsSlots[i].audioSrcSelect->setCurrentIndex(sIdx);
+                        }
+                        m_cllsSlots[i].audioSrcSelect->blockSignals(false);
+                    }
+                    if (!audioDst.isEmpty() && m_cllsSlots[i].audioDstSelect) {
+                        m_cllsSlots[i].audioDstSelect->blockSignals(true);
+                        int dIdx = m_cllsSlots[i].audioDstSelect->findData(audioDst);
+                        if (dIdx >= 0) {
+                            m_cllsSlots[i].audioDstSelect->setCurrentIndex(dIdx);
+                        }
+                        m_cllsSlots[i].audioDstSelect->blockSignals(false);
                     }
 
                     QString slotInterface = slotSavedObj["interface"].toString();
@@ -1979,6 +2329,12 @@ void MainWindow::saveAudioConfig() {
             if (m_cllsSlots[i].capturePortSelect) {
                 slotObj["capture_port"] = m_cllsSlots[i].capturePortSelect->currentData().toString();
             }
+            if (m_cllsSlots[i].audioSrcSelect) {
+                slotObj["audio_src"] = m_cllsSlots[i].audioSrcSelect->currentData().toString();
+            }
+            if (m_cllsSlots[i].audioDstSelect) {
+                slotObj["audio_dst"] = m_cllsSlots[i].audioDstSelect->currentData().toString();
+            }
             slotObj["is_calibrating"] = m_cllsSlots[i].isCalibrating;
             cllsArray.append(slotObj);
         }
@@ -2082,10 +2438,33 @@ void MainWindow::startCllsCalibration(int slotIdx) {
             }
         }
         
-        QString anchor1 = interfaceCapturePorts.size() > 0 ? interfaceCapturePorts[0] : QString("%1:capture_AUX0").arg(inputInterface);
-        QString anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
-        QString playDest1 = interfacePlaybackPorts.size() > 0 ? interfacePlaybackPorts[0] : QString("%1:playback_AUX0").arg(interface);
-        QString playDest2 = interfacePlaybackPorts.size() > 1 ? interfacePlaybackPorts[1] : QString("%1:playback_AUX1").arg(interface);
+        QString anchor1, anchor2;
+        QString srcData = slot.audioSrcSelect->currentData().toString();
+        if (!srcData.isEmpty()) {
+            QStringList srcParts = srcData.split(';');
+            if (srcParts.size() >= 2) {
+                anchor1 = srcParts[0];
+                anchor2 = srcParts[1];
+            }
+        }
+        if (anchor1.isEmpty() || anchor2.isEmpty()) {
+            anchor1 = interfaceCapturePorts.size() > 0 ? interfaceCapturePorts[0] : QString("%1:capture_AUX0").arg(inputInterface);
+            anchor2 = interfaceCapturePorts.size() > 1 ? interfaceCapturePorts[1] : QString("%1:capture_AUX1").arg(inputInterface);
+        }
+
+        QString playDest1, playDest2;
+        QString dstData = slot.audioDstSelect->currentData().toString();
+        if (!dstData.isEmpty()) {
+            QStringList dstParts = dstData.split(';');
+            if (dstParts.size() >= 2) {
+                playDest1 = dstParts[0];
+                playDest2 = dstParts[1];
+            }
+        }
+        if (playDest1.isEmpty() || playDest2.isEmpty()) {
+            playDest1 = interfacePlaybackPorts.size() > 0 ? interfacePlaybackPorts[0] : QString("%1:playback_AUX0").arg(interface);
+            playDest2 = interfacePlaybackPorts.size() > 1 ? interfacePlaybackPorts[1] : QString("%1:playback_AUX1").arg(interface);
+        }
 
         // Link in a background thread to prevent blocking main GUI thread
         std::thread([=]() {
@@ -2280,19 +2659,24 @@ static QString getFriendlyPortName(const QString &portName, const QString &inter
 void MainWindow::populatePortsForSlot(int slotIdx) {
     if (slotIdx < 0 || slotIdx >= 3) return;
     CllsSlot &slot = m_cllsSlots[slotIdx];
-    if (!slot.interfaceSelect || !slot.playbackPortSelect || !slot.capturePortSelect) return;
+    if (!slot.interfaceSelect || !slot.playbackPortSelect || !slot.capturePortSelect || !slot.audioSrcSelect || !slot.audioDstSelect) return;
 
     slot.playbackPortSelect->blockSignals(true);
     slot.capturePortSelect->blockSignals(true);
+    slot.audioSrcSelect->blockSignals(true);
+    slot.audioDstSelect->blockSignals(true);
 
     slot.playbackPortSelect->clear();
     slot.capturePortSelect->clear();
+    slot.audioSrcSelect->clear();
+    slot.audioDstSelect->clear();
 
     QString activeInterface = slot.interfaceSelect->currentData().toString();
     if (!activeInterface.isEmpty()) {
         QList<QString> allPorts = queryPipeWirePorts();
         QString inputInterface = getMatchingInputInterface(activeInterface, allPorts);
 
+        // 1. Populate calibration loopback ports (playback & capture)
         for (const QString &port : allPorts) {
             // Playback Ports
             if (port.startsWith(activeInterface) && port.contains("playback")) {
@@ -2308,6 +2692,64 @@ void MainWindow::populatePortsForSlot(int slotIdx) {
             if (port.startsWith(activeInterface) && port.contains("monitor")) {
                 QString displayName = getFriendlyPortName(port, activeInterface);
                 slot.capturePortSelect->addItem(displayName + " (Loopback Monitor)", port);
+            }
+        }
+
+        // 2. Populate Audio Src (stereo capture pairs from Sync Interface)
+        QList<QString> capturePorts;
+        for (const QString &port : allPorts) {
+            if (port.startsWith(inputInterface) && port.contains("capture")) {
+                capturePorts.append(port);
+            }
+        }
+        std::sort(capturePorts.begin(), capturePorts.end());
+        for (int k = 0; k < capturePorts.size(); k += 2) {
+            if (k + 1 < capturePorts.size()) {
+                QString p1 = capturePorts[k];
+                QString p2 = capturePorts[k + 1];
+                QString displayName = QString("%1 + %2").arg(getFriendlyPortName(p1, inputInterface)).arg(getFriendlyPortName(p2, inputInterface));
+                slot.audioSrcSelect->addItem(displayName, QString("%1;%2").arg(p1).arg(p2));
+            } else {
+                QString p1 = capturePorts[k];
+                QString displayName = getFriendlyPortName(p1, inputInterface);
+                slot.audioSrcSelect->addItem(displayName, QString("%1;%1").arg(p1));
+            }
+        }
+
+        // 3. Populate Audio Dst (stereo playback pairs in the entire system)
+        QMap<QString, QList<QString>> playbackNodes;
+        for (const QString &port : allPorts) {
+            if (port.contains("playback")) {
+                int colonIdx = port.indexOf(':');
+                if (colonIdx != -1) {
+                    QString node = port.left(colonIdx);
+                    playbackNodes[node].append(port);
+                }
+            }
+        }
+        for (auto it = playbackNodes.begin(); it != playbackNodes.end(); ++it) {
+            QString node = it.key();
+            QList<QString> ports = it.value();
+            std::sort(ports.begin(), ports.end());
+            
+            QString nodeFriendly = node;
+            if (nodeFriendly.startsWith("alsa_output.")) {
+                nodeFriendly = nodeFriendly.mid(12);
+            }
+            int dotIdx = nodeFriendly.indexOf('.');
+            if (dotIdx != -1) nodeFriendly = nodeFriendly.left(dotIdx);
+            
+            for (int k = 0; k < ports.size(); k += 2) {
+                if (k + 1 < ports.size()) {
+                    QString p1 = ports[k];
+                    QString p2 = ports[k + 1];
+                    QString displayName = QString("%1: %2 + %3").arg(nodeFriendly).arg(getFriendlyPortName(p1, node)).arg(getFriendlyPortName(p2, node));
+                    slot.audioDstSelect->addItem(displayName, QString("%1;%2").arg(p1).arg(p2));
+                } else {
+                    QString p1 = ports[k];
+                    QString displayName = QString("%1: %2").arg(nodeFriendly).arg(getFriendlyPortName(p1, node));
+                    slot.audioDstSelect->addItem(displayName, QString("%1;%1").arg(p1));
+                }
             }
         }
     }
@@ -2344,6 +2786,8 @@ void MainWindow::populatePortsForSlot(int slotIdx) {
 
     slot.playbackPortSelect->blockSignals(false);
     slot.capturePortSelect->blockSignals(false);
+    slot.audioSrcSelect->blockSignals(false);
+    slot.audioDstSelect->blockSignals(false);
 }
 
 // =============================================================================
@@ -2607,4 +3051,59 @@ void MainWindow::ensureDaemonRunning() {
 
     QString daemonPath = QCoreApplication::applicationDirPath() + "/arthur-daemon";
     QProcess::startDetached(daemonPath, QStringList());
+}
+
+// =============================================================================
+// VHC Console Pages and Instruments Management slots
+// =============================================================================
+void MainWindow::switchConsolePage(int pageIdx) {
+    if (!m_consoleStack) return;
+    m_consoleStack->setCurrentIndex(pageIdx);
+    
+    m_btnInputsPage->setProperty("active", pageIdx == 0);
+    m_btnBussesPage->setProperty("active", pageIdx == 1);
+    m_btnInstrumentsPage->setProperty("active", pageIdx == 2);
+    
+    m_btnInputsPage->style()->unpolish(m_btnInputsPage);
+    m_btnInputsPage->style()->polish(m_btnInputsPage);
+    m_btnBussesPage->style()->unpolish(m_btnBussesPage);
+    m_btnBussesPage->style()->polish(m_btnBussesPage);
+    m_btnInstrumentsPage->style()->unpolish(m_btnInstrumentsPage);
+    m_btnInstrumentsPage->style()->polish(m_btnInstrumentsPage);
+
+    if (pageIdx == 0 || pageIdx == 1) {
+        rebuildConsoleChannels();
+    }
+}
+
+void MainWindow::loadPlugin(int slotIdx) {
+    if (slotIdx < 0 || slotIdx >= m_instrumentSlots.size()) return;
+    InstrumentSlotRow &row = m_instrumentSlots[slotIdx];
+    QString pluginName = row.pluginSelect->currentData().toString();
+    if (pluginName.isEmpty() || pluginName == "Select Plugin...") return;
+
+    QString cmd = QString("LOAD %1 %2").arg(row.shmName).arg(pluginName);
+    sendDaemonCommand(cmd);
+
+    // Give a short delay and refresh channels
+    QTimer::singleShot(500, this, &MainWindow::rebuildConsoleChannels);
+}
+
+void MainWindow::unloadPlugin(int slotIdx) {
+    if (slotIdx < 0 || slotIdx >= m_instrumentSlots.size()) return;
+    InstrumentSlotRow &row = m_instrumentSlots[slotIdx];
+
+    QString cmd = QString("UNLOAD %1").arg(row.shmName);
+    sendDaemonCommand(cmd);
+
+    // Give a short delay and refresh channels
+    QTimer::singleShot(500, this, &MainWindow::rebuildConsoleChannels);
+}
+
+void MainWindow::openPluginGui(int slotIdx) {
+    if (slotIdx < 0 || slotIdx >= m_instrumentSlots.size()) return;
+    InstrumentSlotRow &row = m_instrumentSlots[slotIdx];
+
+    QString cmd = QString("OPEN_EDITOR %1").arg(row.shmName);
+    sendDaemonCommand(cmd);
 }
