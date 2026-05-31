@@ -1780,6 +1780,12 @@ void MainWindow::loadAudioConfig() {
                         }
                         m_cllsSlots[i].capturePortSelect->blockSignals(false);
                     }
+
+                    if (slotSavedObj.contains("is_calibrating") && slotSavedObj["is_calibrating"].toBool()) {
+                        QTimer::singleShot(2000, this, [=]() {
+                            startCllsCalibration(i);
+                        });
+                    }
                 }
             }
         }
@@ -1972,6 +1978,7 @@ void MainWindow::saveAudioConfig() {
             if (m_cllsSlots[i].capturePortSelect) {
                 slotObj["capture_port"] = m_cllsSlots[i].capturePortSelect->currentData().toString();
             }
+            slotObj["is_calibrating"] = m_cllsSlots[i].isCalibrating;
             cllsArray.append(slotObj);
         }
         obj["clls_slots"] = cllsArray;
@@ -2053,6 +2060,7 @@ void MainWindow::startCllsCalibration(int slotIdx) {
     slot.process->start(QCoreApplication::applicationDirPath() + "/pw_module_clls", QStringList() << alignerName);
 
     updateGlobalStatus("⚡ Calibrating", QString("Spawning CLLS Aligner for Slot %1...").arg(slotIdx + 1), true);
+    saveAudioConfig();
 
     // Dynamic graph loopback auto-linker
     QTimer::singleShot(1500, this, [=]() {
@@ -2199,6 +2207,7 @@ void MainWindow::handleCllsFinished(int slotIdx, int exitCode, QProcess::ExitSta
     }
 
     updateGlobalStatus("✓ CLLS Finished", QString("CLLS Calibration Slot %1 finished.").arg(slotIdx + 1), true);
+    saveAudioConfig();
 }
 
 static QString getFriendlyPortName(const QString &portName, const QString &interfaceName) {
