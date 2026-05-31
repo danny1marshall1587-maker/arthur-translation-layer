@@ -2313,6 +2313,25 @@ void MainWindow::populatePortsForSlot(int slotIdx) {
         slot.capturePortSelect->addItem("capture_AUX0 (Fallback)", inputInterface + ":capture_AUX0");
     }
 
+    // Auto-select Loopback ports by default if present
+    int defaultPlaybackIdx = 0;
+    for (int k = 0; k < slot.playbackPortSelect->count(); ++k) {
+        if (slot.playbackPortSelect->itemText(k).contains("Loopback", Qt::CaseInsensitive)) {
+            defaultPlaybackIdx = k;
+            break;
+        }
+    }
+    slot.playbackPortSelect->setCurrentIndex(defaultPlaybackIdx);
+
+    int defaultCaptureIdx = 0;
+    for (int k = 0; k < slot.capturePortSelect->count(); ++k) {
+        if (slot.capturePortSelect->itemText(k).contains("Loopback", Qt::CaseInsensitive)) {
+            defaultCaptureIdx = k;
+            break;
+        }
+    }
+    slot.capturePortSelect->setCurrentIndex(defaultCaptureIdx);
+
     slot.playbackPortSelect->blockSignals(false);
     slot.capturePortSelect->blockSignals(false);
 }
