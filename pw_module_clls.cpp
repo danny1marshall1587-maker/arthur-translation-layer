@@ -578,6 +578,7 @@ int main(int argc, char *argv[]) {
                           << "  Compensation:    +" << delay << " samples" << std::endl
                           << "  Phase Error:     " << phase_jitter << " samples" << std::endl
                           << "  Status:          " << status << std::endl;
+                std::cout << "[CLLS STATUS] Measured RTT: " << rtt << " samples | Applied Offset: " << (delay >= 0 ? "+" : "") << delay << " samples" << std::endl;
             }
         }
     });
