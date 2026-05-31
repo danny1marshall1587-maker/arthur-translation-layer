@@ -1781,7 +1781,8 @@ void MainWindow::loadAudioConfig() {
                         m_cllsSlots[i].capturePortSelect->blockSignals(false);
                     }
 
-                    if (slotSavedObj.contains("is_calibrating") && slotSavedObj["is_calibrating"].toBool()) {
+                    QString slotInterface = slotSavedObj["interface"].toString();
+                    if (!slotInterface.isEmpty() && !playbackPort.isEmpty() && !capturePort.isEmpty()) {
                         QTimer::singleShot(2000, this, [=]() {
                             startCllsCalibration(i);
                         });
