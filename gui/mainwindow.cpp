@@ -4,6 +4,8 @@
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QStackedWidget>
+#include <QMenu>
+#include <QAction>
 #include <QFileDialog>
 #include <QStandardPaths>
 #include <QDir>
@@ -20,6 +22,7 @@
 #include <QMimeData>
 #include <QDirIterator>
 #include <QScrollArea>
+#include <QWindow>
 
 // =============================================================================
 // DropZoneWidget Implementation
@@ -374,6 +377,90 @@ void MainWindow::setupGlobalStylesheet() {
         .instrument-slot-card:hover {
             border-color: rgba(191, 90, 242, 0.55);
             background-color: rgba(35, 24, 59, 0.7);
+        }
+        .plugin-slot-btn {
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px dashed rgba(191, 90, 242, 0.25);
+            border-radius: 4px;
+            color: #8a829e;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 2px 4px;
+            height: 18px;
+            text-align: left;
+        }
+        .plugin-slot-btn:hover {
+            border-color: rgba(191, 90, 242, 0.6);
+            background-color: rgba(0, 0, 0, 0.6);
+            color: #ffffff;
+        }
+        .plugin-slot-btn[loaded="true"] {
+            background-color: rgba(26, 18, 43, 0.7);
+            border: 1px solid #bf5af2;
+            color: #d68ff7;
+        }
+        .plugin-slot-btn[loaded="true"]:hover {
+            border-color: #d68ff7;
+            color: #ffffff;
+        }
+        .btn-bypass {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #a0a5b5;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 8px;
+            width: 13px;
+            height: 13px;
+            padding: 0px;
+        }
+        .btn-bypass:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }
+        .btn-bypass:checked {
+            background-color: rgba(255, 149, 0, 0.25);
+            border-color: #ff9500;
+            color: #ffb040;
+        }
+        .btn-auto {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #a0a5b5;
+            border-radius: 4px;
+            font-weight: 800;
+            font-size: 8px;
+            padding: 3px 5px;
+        }
+        .btn-auto:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }
+        .btn-auto:checked {
+            background-color: rgba(0, 240, 255, 0.15);
+            border-color: #00f0ff;
+            color: #00f0ff;
+        }
+        .btn-auto-slot {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #a0a5b5;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 8px;
+            width: 13px;
+            height: 13px;
+            padding: 0px;
+        }
+        .btn-auto-slot:hover {
+            background-color: rgba(0, 240, 255, 0.1);
+            color: #00f0ff;
+        }
+        .btn-auto-slot:checked {
+            background-color: rgba(0, 240, 255, 0.2);
+            border-color: #00f0ff;
+            color: #00f0ff;
+            box-shadow: 0 0 4px rgba(0, 240, 255, 0.4);
         }
     )";
     setStyleSheet(style);
@@ -1456,6 +1543,59 @@ void MainWindow::rebuildConsoleChannels() {
                 row.modeSelect->setVisible(false);
             }
 
+            int capturedIdx = rowIdx;
+
+            // Plugin Slots (4 rows)
+            QVBoxLayout *slotsLayout = new QVBoxLayout();
+            slotsLayout->setSpacing(4);
+            for (int s = 0; s < 4; ++s) {
+                QHBoxLayout *slotRowLayout = new QHBoxLayout();
+                slotRowLayout->setSpacing(3);
+
+                QPushButton *slotBtn = new QPushButton("-", strip);
+                slotBtn->setProperty("class", "plugin-slot-btn");
+                slotBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+                slotBtn->setCursor(Qt::PointingHandCursor);
+
+                QPushButton *bypassBtn = new QPushButton("B", strip);
+                bypassBtn->setProperty("class", "btn-bypass");
+                bypassBtn->setCheckable(true);
+                bypassBtn->setCursor(Qt::PointingHandCursor);
+
+                QPushButton *autoGainBtn = new QPushButton("A", strip);
+                autoGainBtn->setProperty("class", "btn-auto-slot");
+                autoGainBtn->setCheckable(true);
+                autoGainBtn->setToolTip("Per-plugin auto gain staging (RMS level match)");
+                autoGainBtn->setCursor(Qt::PointingHandCursor);
+
+                slotRowLayout->addWidget(slotBtn, 1);
+                slotRowLayout->addWidget(bypassBtn, 0);
+                slotRowLayout->addWidget(autoGainBtn, 0);
+                slotsLayout->addLayout(slotRowLayout);
+
+                row.pluginSlots[s].slotBtn = slotBtn;
+                row.pluginSlots[s].bypassBtn = bypassBtn;
+                row.pluginSlots[s].autoGainBtn = autoGainBtn;
+                row.pluginSlots[s].pluginName = "";
+                row.pluginSlots[s].bypassed = false;
+                row.pluginSlots[s].autoGain = false;
+                row.pluginSlots[s].shmName = isPhysical
+                    ? QString("ArthurAudioIPC_physical_ch%1_slot%2").arg(capturedIdx).arg(s)
+                    : QString("ArthurAudioIPC_ch%1_slot%2").arg(capturedIdx).arg(s);
+
+                // Connect signals
+                connect(slotBtn, &QPushButton::clicked, this, [=]() {
+                    handleSlotClicked(capturedIdx, s, false);
+                });
+                connect(bypassBtn, &QPushButton::clicked, this, [=]() {
+                    toggleSlotBypass(capturedIdx, s, false);
+                });
+                connect(autoGainBtn, &QPushButton::toggled, this, [=](bool) {
+                    toggleSlotAutoGain(capturedIdx, s, false);
+                });
+            }
+            sl->addLayout(slotsLayout);
+
             // Send Knobs Row (Reverb & Delay side-by-side)
             QHBoxLayout *sendsLayout = new QHBoxLayout();
             sendsLayout->setSpacing(6);
@@ -1492,7 +1632,7 @@ void MainWindow::rebuildConsoleChannels() {
 
             sl->addLayout(sendsLayout);
 
-            // Fader & Meter Row (Vertical slider and meter side-by-side)
+            // Fader & Meter Row (Vertical slider and meter side-by-side with AUTO button)
             QHBoxLayout *faderMeterLayout = new QHBoxLayout();
             faderMeterLayout->setSpacing(12);
 
@@ -1502,6 +1642,16 @@ void MainWindow::rebuildConsoleChannels() {
             row.volumeSlider->setFixedHeight(160);
             row.volumeSlider->setToolTip("Channel Volume Fader");
 
+            row.autoGainBtn = new QPushButton("AUTO", strip);
+            row.autoGainBtn->setCheckable(true);
+            row.autoGainBtn->setProperty("class", "btn-auto");
+            row.autoGainBtn->setCursor(Qt::PointingHandCursor);
+            row.autoGainBtn->setFixedWidth(36);
+
+            QVBoxLayout *faderLayout = new QVBoxLayout();
+            faderLayout->addWidget(row.volumeSlider, 0, Qt::AlignHCenter);
+            faderLayout->addWidget(row.autoGainBtn, 0, Qt::AlignHCenter);
+
             row.levelMeter = new QProgressBar(strip);
             row.levelMeter->setOrientation(Qt::Vertical);
             row.levelMeter->setRange(0, 100);
@@ -1509,7 +1659,7 @@ void MainWindow::rebuildConsoleChannels() {
             row.levelMeter->setTextVisible(false);
             row.levelMeter->setFixedHeight(160);
 
-            faderMeterLayout->addWidget(row.volumeSlider, 0, Qt::AlignHCenter);
+            faderMeterLayout->addLayout(faderLayout);
             faderMeterLayout->addWidget(row.levelMeter, 0, Qt::AlignHCenter);
             sl->addLayout(faderMeterLayout);
 
@@ -1535,7 +1685,6 @@ void MainWindow::rebuildConsoleChannels() {
             m_consoleRows.append(row);
 
             // Connect controls to actions and settings save
-            int capturedIdx = rowIdx;
             connect(row.modeSelect, qOverload<int>(&QComboBox::currentIndexChanged), this, [=](int idx) {
                 applyChannelMode(capturedIdx, idx);
                 saveMixerConfig();
@@ -1545,6 +1694,9 @@ void MainWindow::rebuildConsoleChannels() {
             connect(row.sendDelay, &QDial::valueChanged, this, [=](int) { saveMixerConfig(); });
             connect(row.muteBtn, &QPushButton::toggled, this, [=](bool) { saveMixerConfig(); });
             connect(row.soloBtn, &QPushButton::toggled, this, [=](bool) { saveMixerConfig(); });
+            connect(row.autoGainBtn, &QPushButton::toggled, this, [=](bool) {
+                toggleAutoGain(capturedIdx, false);
+            });
 
             ++rowIdx;
         }
@@ -1587,10 +1739,56 @@ void MainWindow::rebuildConsoleChannels() {
         }
         sl->addWidget(lbl);
 
-        // Spacer to align faders vertically
-        sl->addSpacing(44); 
+        // Plugin Slots (4 rows) for Busses
+        QVBoxLayout *slotsLayout = new QVBoxLayout();
+        slotsLayout->setSpacing(4);
+        for (int s = 0; s < 4; ++s) {
+            QHBoxLayout *slotRowLayout = new QHBoxLayout();
+            slotRowLayout->setSpacing(3);
 
-        // Fader & Meter Row
+            QPushButton *slotBtn = new QPushButton("-", strip);
+            slotBtn->setProperty("class", "plugin-slot-btn");
+            slotBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            slotBtn->setCursor(Qt::PointingHandCursor);
+
+            QPushButton *bypassBtn = new QPushButton("B", strip);
+            bypassBtn->setProperty("class", "btn-bypass");
+            bypassBtn->setCheckable(true);
+            bypassBtn->setCursor(Qt::PointingHandCursor);
+
+            QPushButton *autoGainBtn = new QPushButton("A", strip);
+            autoGainBtn->setProperty("class", "btn-auto-slot");
+            autoGainBtn->setCheckable(true);
+            autoGainBtn->setToolTip("Per-plugin auto gain staging (RMS level match)");
+            autoGainBtn->setCursor(Qt::PointingHandCursor);
+
+            slotRowLayout->addWidget(slotBtn, 1);
+            slotRowLayout->addWidget(bypassBtn, 0);
+            slotRowLayout->addWidget(autoGainBtn, 0);
+            slotsLayout->addLayout(slotRowLayout);
+
+            bus.pluginSlots[s].slotBtn = slotBtn;
+            bus.pluginSlots[s].bypassBtn = bypassBtn;
+            bus.pluginSlots[s].autoGainBtn = autoGainBtn;
+            bus.pluginSlots[s].pluginName = "";
+            bus.pluginSlots[s].bypassed = false;
+            bus.pluginSlots[s].autoGain = false;
+            bus.pluginSlots[s].shmName = QString("ArthurAudioIPC_bus_ch%1_slot%2").arg(i).arg(s);
+
+            // Connect signals
+            connect(slotBtn, &QPushButton::clicked, this, [=]() {
+                handleSlotClicked(i, s, true);
+            });
+            connect(bypassBtn, &QPushButton::clicked, this, [=]() {
+                toggleSlotBypass(i, s, true);
+            });
+            connect(autoGainBtn, &QPushButton::toggled, this, [=](bool) {
+                toggleSlotAutoGain(i, s, true);
+            });
+        }
+        sl->addLayout(slotsLayout);
+
+        // Fader & Meter Row (with AUTO button)
         QHBoxLayout *faderMeterLayout = new QHBoxLayout();
         faderMeterLayout->setSpacing(12);
 
@@ -1600,6 +1798,16 @@ void MainWindow::rebuildConsoleChannels() {
         bus.volumeSlider->setFixedHeight(160);
         bus.volumeSlider->setToolTip(QString("%1 Volume").arg(bus.name));
 
+        bus.autoGainBtn = new QPushButton("AUTO", strip);
+        bus.autoGainBtn->setCheckable(true);
+        bus.autoGainBtn->setProperty("class", "btn-auto");
+        bus.autoGainBtn->setCursor(Qt::PointingHandCursor);
+        bus.autoGainBtn->setFixedWidth(36);
+
+        QVBoxLayout *faderLayout = new QVBoxLayout();
+        faderLayout->addWidget(bus.volumeSlider, 0, Qt::AlignHCenter);
+        faderLayout->addWidget(bus.autoGainBtn, 0, Qt::AlignHCenter);
+
         bus.levelMeter = new QProgressBar(strip);
         bus.levelMeter->setOrientation(Qt::Vertical);
         bus.levelMeter->setRange(0, 100);
@@ -1607,7 +1815,7 @@ void MainWindow::rebuildConsoleChannels() {
         bus.levelMeter->setTextVisible(false);
         bus.levelMeter->setFixedHeight(160);
 
-        faderMeterLayout->addWidget(bus.volumeSlider, 0, Qt::AlignHCenter);
+        faderMeterLayout->addLayout(faderLayout);
         faderMeterLayout->addWidget(bus.levelMeter, 0, Qt::AlignHCenter);
         sl->addLayout(faderMeterLayout);
 
@@ -1624,6 +1832,9 @@ void MainWindow::rebuildConsoleChannels() {
         // Connect changes to auto-save
         connect(bus.volumeSlider, &QSlider::valueChanged, this, [=](int) { saveMixerConfig(); });
         connect(bus.muteBtn, &QPushButton::toggled, this, [=](bool) { saveMixerConfig(); });
+        connect(bus.autoGainBtn, &QPushButton::toggled, this, [=](bool) {
+            toggleAutoGain(i, true);
+        });
     }
 
     // 4. Load Mixer Config to restore previous state
@@ -1663,6 +1874,18 @@ void MainWindow::saveMixerConfig() {
         if (row.muteBtn) chan["mute"] = row.muteBtn->isChecked();
         if (row.soloBtn) chan["solo"] = row.soloBtn->isChecked();
         if (row.modeSelect) chan["mode"] = row.modeSelect->currentIndex();
+        chan["autoGain"] = row.autoGainEnabled;
+
+        QJsonArray slotsArr;
+        for (int s = 0; s < 4; ++s) {
+            QJsonObject slotObj;
+            slotObj["plugin"] = row.pluginSlots[s].pluginName;
+            slotObj["bypassed"] = row.pluginSlots[s].bypassed;
+            slotObj["autoGain"] = row.pluginSlots[s].autoGain;
+            slotsArr.append(slotObj);
+        }
+        chan["slots"] = slotsArr;
+
         channelsObj[row.shmName] = chan;
     }
     root["channels"] = channelsObj;
@@ -1673,6 +1896,18 @@ void MainWindow::saveMixerConfig() {
         QJsonObject b;
         if (bus.volumeSlider) b["volume"] = bus.volumeSlider->value();
         if (bus.muteBtn) b["mute"] = bus.muteBtn->isChecked();
+        b["autoGain"] = bus.autoGainEnabled;
+
+        QJsonArray slotsArr;
+        for (int s = 0; s < 4; ++s) {
+            QJsonObject slotObj;
+            slotObj["plugin"] = bus.pluginSlots[s].pluginName;
+            slotObj["bypassed"] = bus.pluginSlots[s].bypassed;
+            slotObj["autoGain"] = bus.pluginSlots[s].autoGain;
+            slotsArr.append(slotObj);
+        }
+        b["slots"] = slotsArr;
+
         bussesObj[bus.name] = b;
     }
     root["busses"] = bussesObj;
@@ -1719,6 +1954,50 @@ void MainWindow::loadMixerConfig() {
             if (row.modeSelect && chan.contains("mode")) {
                 row.modeSelect->setCurrentIndex(chan["mode"].toInt());
             }
+            if (row.autoGainBtn && chan.contains("autoGain")) {
+                bool ag = chan["autoGain"].toBool();
+                row.autoGainBtn->setChecked(ag);
+                row.autoGainEnabled = ag;
+            }
+            if (chan.contains("slots")) {
+                QJsonArray slotsArr = chan["slots"].toArray();
+                for (int s = 0; s < std::min(static_cast<int>(slotsArr.size()), 4); ++s) {
+                    QJsonObject slotObj = slotsArr[s].toObject();
+                    QString pName = slotObj["plugin"].toString();
+                    bool bp = slotObj["bypassed"].toBool();
+                    bool ag = slotObj["autoGain"].toBool();
+                    row.pluginSlots[s].pluginName = pName;
+                    row.pluginSlots[s].bypassed = bp;
+                    row.pluginSlots[s].autoGain = ag;
+
+                    if (row.pluginSlots[s].slotBtn) {
+                        row.pluginSlots[s].slotBtn->setText(pName.isEmpty() ? "-" : pName);
+                        row.pluginSlots[s].slotBtn->setProperty("loaded", !pName.isEmpty());
+                        row.pluginSlots[s].slotBtn->style()->unpolish(row.pluginSlots[s].slotBtn);
+                        row.pluginSlots[s].slotBtn->style()->polish(row.pluginSlots[s].slotBtn);
+                    }
+                    if (row.pluginSlots[s].bypassBtn) {
+                        row.pluginSlots[s].bypassBtn->setChecked(bp);
+                    }
+                    if (row.pluginSlots[s].autoGainBtn) {
+                        row.pluginSlots[s].autoGainBtn->setChecked(ag);
+                    }
+
+                    // Re-trigger daemon load/bypass/autogain commands for restoration on startup
+                    if (!pName.isEmpty()) {
+                        QString cmd = QString("LOAD %1 %2").arg(row.pluginSlots[s].shmName).arg(pName);
+                        sendDaemonCommand(cmd);
+                        if (bp) {
+                            QString bpCmd = QString("BYPASS_PLUGIN %1 1").arg(row.pluginSlots[s].shmName);
+                            sendDaemonCommand(bpCmd);
+                        }
+                        if (ag) {
+                            QString agCmd = QString("AUTOGAIN_PLUGIN %1 1").arg(row.pluginSlots[s].shmName);
+                            sendDaemonCommand(agCmd);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1731,6 +2010,50 @@ void MainWindow::loadMixerConfig() {
             }
             if (bus.muteBtn && b.contains("mute")) {
                 bus.muteBtn->setChecked(b["mute"].toBool());
+            }
+            if (bus.autoGainBtn && b.contains("autoGain")) {
+                bool ag = b["autoGain"].toBool();
+                bus.autoGainBtn->setChecked(ag);
+                bus.autoGainEnabled = ag;
+            }
+            if (b.contains("slots")) {
+                QJsonArray slotsArr = b["slots"].toArray();
+                for (int s = 0; s < std::min(static_cast<int>(slotsArr.size()), 4); ++s) {
+                    QJsonObject slotObj = slotsArr[s].toObject();
+                    QString pName = slotObj["plugin"].toString();
+                    bool bp = slotObj["bypassed"].toBool();
+                    bool ag = slotObj["autoGain"].toBool();
+                    bus.pluginSlots[s].pluginName = pName;
+                    bus.pluginSlots[s].bypassed = bp;
+                    bus.pluginSlots[s].autoGain = ag;
+
+                    if (bus.pluginSlots[s].slotBtn) {
+                        bus.pluginSlots[s].slotBtn->setText(pName.isEmpty() ? "-" : pName);
+                        bus.pluginSlots[s].slotBtn->setProperty("loaded", !pName.isEmpty());
+                        bus.pluginSlots[s].slotBtn->style()->unpolish(bus.pluginSlots[s].slotBtn);
+                        bus.pluginSlots[s].slotBtn->style()->polish(bus.pluginSlots[s].slotBtn);
+                    }
+                    if (bus.pluginSlots[s].bypassBtn) {
+                        bus.pluginSlots[s].bypassBtn->setChecked(bp);
+                    }
+                    if (bus.pluginSlots[s].autoGainBtn) {
+                        bus.pluginSlots[s].autoGainBtn->setChecked(ag);
+                    }
+
+                    // Re-trigger daemon load/bypass/autogain commands for restoration on startup
+                    if (!pName.isEmpty()) {
+                        QString cmd = QString("LOAD %1 %2").arg(bus.pluginSlots[s].shmName).arg(pName);
+                        sendDaemonCommand(cmd);
+                        if (bp) {
+                            QString bpCmd = QString("BYPASS_PLUGIN %1 1").arg(bus.pluginSlots[s].shmName);
+                            sendDaemonCommand(bpCmd);
+                        }
+                        if (ag) {
+                            QString agCmd = QString("AUTOGAIN_PLUGIN %1 1").arg(bus.pluginSlots[s].shmName);
+                            sendDaemonCommand(agCmd);
+                        }
+                    }
+                }
             }
         }
     }
@@ -1772,6 +2095,19 @@ void MainWindow::updateMeterAnimations() {
             nextVal = currentVal - (currentVal - targetVal) * 0.25; // slow decay
         }
         row.levelMeter->setValue(qBound(0, nextVal, 100));
+
+        // Auto Gain Control (AGC) staging
+        if (row.autoGainEnabled && active && !isMuted) {
+            int level = row.levelMeter->value();
+            if (row.volumeSlider && level > 0) {
+                int currentVol = row.volumeSlider->value();
+                if (level < 65 && currentVol < 100) {
+                    row.volumeSlider->setValue(currentVol + 1);
+                } else if (level > 75 && currentVol > 0) {
+                    row.volumeSlider->setValue(currentVol - 1);
+                }
+            }
+        }
     }
 
     // Busses peak meter simulation
@@ -1809,6 +2145,19 @@ void MainWindow::updateMeterAnimations() {
             nextVal = currentVal - (currentVal - targetVal) * 0.2;
         }
         bus.levelMeter->setValue(qBound(0, nextVal, 100));
+
+        // Auto Gain Control (AGC) staging
+        if (bus.autoGainEnabled && active && !isMuted) {
+            int level = bus.levelMeter->value();
+            if (bus.volumeSlider && level > 0) {
+                int currentVol = bus.volumeSlider->value();
+                if (level < 65 && currentVol < 100) {
+                    bus.volumeSlider->setValue(currentVol + 1);
+                } else if (level > 75 && currentVol > 0) {
+                    bus.volumeSlider->setValue(currentVol - 1);
+                }
+            }
+        }
     }
 }
 
@@ -3035,7 +3384,12 @@ void MainWindow::handleTuningFinished(int exitCode, QProcess::ExitStatus status)
 
 void MainWindow::ensureDaemonRunning() {
     QLocalSocket socket;
-    socket.connectToServer("/tmp/arthur.sock");
+    QString sockPath = "/tmp/arthur.sock";
+    QByteArray xdg = qgetenv("XDG_RUNTIME_DIR");
+    if (!xdg.isEmpty()) {
+        sockPath = QString(xdg) + "/arthur.sock";
+    }
+    socket.connectToServer(sockPath);
     if (socket.waitForConnected(200)) {
         return;
     }
@@ -3047,7 +3401,7 @@ void MainWindow::ensureDaemonRunning() {
         return;
     }
 
-    QFile::remove("/tmp/arthur.sock");
+    QFile::remove(sockPath);
 
     QString daemonPath = QCoreApplication::applicationDirPath() + "/arthur-daemon";
     QProcess::startDetached(daemonPath, QStringList());
@@ -3106,4 +3460,274 @@ void MainWindow::openPluginGui(int slotIdx) {
 
     QString cmd = QString("OPEN_EDITOR %1").arg(row.shmName);
     sendDaemonCommand(cmd);
+}
+
+void MainWindow::handleSlotClicked(int channelIdx, int slotIdx, bool isBus) {
+    PluginSlot *slot = nullptr;
+    if (isBus) {
+        if (channelIdx < 0 || channelIdx >= m_consoleBusses.size()) return;
+        slot = &m_consoleBusses[channelIdx].pluginSlots[slotIdx];
+    } else {
+        if (channelIdx < 0 || channelIdx >= m_consoleRows.size()) return;
+        slot = &m_consoleRows[channelIdx].pluginSlots[slotIdx];
+    }
+    if (!slot || !slot->slotBtn) return;
+
+    QMenu menu(this);
+    menu.setStyleSheet("QMenu { background-color: #1a122b; border: 1px solid #bf5af2; color: #ffffff; }"
+                       "QMenu::item:selected { background-color: #bf5af2; }");
+
+    if (slot->pluginName.isEmpty()) {
+        // Slot is empty. Show list of scanned VST3 plugins
+        QList<QString> pluginsList = scanInstalledVst3Plugins();
+        if (pluginsList.isEmpty()) {
+            QAction *emptyAct = menu.addAction("No scanned VST3 plugins found");
+            emptyAct->setEnabled(false);
+        } else {
+            for (const QString &plugin : pluginsList) {
+                QAction *act = menu.addAction(plugin);
+                connect(act, &QAction::triggered, this, [=]() {
+                    loadPluginAtSlot(channelIdx, slotIdx, plugin, isBus);
+                });
+            }
+        }
+    } else {
+        // Slot is loaded. Show Open GUI, Bypass, Auto Gain, and Unload
+        QAction *guiAct = menu.addAction("Open Editor GUI");
+        connect(guiAct, &QAction::triggered, this, [=]() {
+            openPluginEditorWindow(slot->shmName);
+        });
+
+        QAction *bypassAct = menu.addAction(slot->bypassed ? "Unbypass Plugin" : "Bypass Plugin");
+        connect(bypassAct, &QAction::triggered, this, [=]() {
+            if (slot->bypassBtn) {
+                slot->bypassBtn->setChecked(!slot->bypassed);
+            }
+            toggleSlotBypass(channelIdx, slotIdx, isBus);
+        });
+
+        QAction *agAct = menu.addAction(slot->autoGain ? "Disable Auto Gain" : "Enable Auto Gain");
+        connect(agAct, &QAction::triggered, this, [=]() {
+            if (slot->autoGainBtn) {
+                slot->autoGainBtn->setChecked(!slot->autoGain);
+            }
+            toggleSlotAutoGain(channelIdx, slotIdx, isBus);
+        });
+
+        menu.addSeparator();
+
+        QAction *unloadAct = menu.addAction("Unload Plugin");
+        connect(unloadAct, &QAction::triggered, this, [=]() {
+            unloadPluginAtSlot(channelIdx, slotIdx, isBus);
+        });
+    }
+
+    menu.exec(QCursor::pos());
+}
+
+void MainWindow::toggleSlotBypass(int channelIdx, int slotIdx, bool isBus) {
+    PluginSlot *slot = nullptr;
+    if (isBus) {
+        if (channelIdx < 0 || channelIdx >= m_consoleBusses.size()) return;
+        slot = &m_consoleBusses[channelIdx].pluginSlots[slotIdx];
+    } else {
+        if (channelIdx < 0 || channelIdx >= m_consoleRows.size()) return;
+        slot = &m_consoleRows[channelIdx].pluginSlots[slotIdx];
+    }
+    if (!slot) return;
+
+    if (slot->bypassBtn) {
+        slot->bypassed = slot->bypassBtn->isChecked();
+    } else {
+        slot->bypassed = !slot->bypassed;
+    }
+
+    // Send daemon command to bypass/unbypass the guest plugin
+    QString cmd = QString("BYPASS_PLUGIN %1 %2").arg(slot->shmName).arg(slot->bypassed ? 1 : 0);
+    sendDaemonCommand(cmd);
+
+    saveMixerConfig();
+}
+
+void MainWindow::toggleAutoGain(int channelIdx, bool isBus) {
+    if (isBus) {
+        if (channelIdx >= 0 && channelIdx < m_consoleBusses.size()) {
+            m_consoleBusses[channelIdx].autoGainEnabled = m_consoleBusses[channelIdx].autoGainBtn->isChecked();
+            saveMixerConfig();
+        }
+    } else {
+        if (channelIdx >= 0 && channelIdx < m_consoleRows.size()) {
+            m_consoleRows[channelIdx].autoGainEnabled = m_consoleRows[channelIdx].autoGainBtn->isChecked();
+            saveMixerConfig();
+        }
+    }
+}
+
+void MainWindow::loadPluginAtSlot(int channelIdx, int slotIdx, const QString &pluginName, bool isBus) {
+    PluginSlot *slot = nullptr;
+    if (isBus) {
+        if (channelIdx < 0 || channelIdx >= m_consoleBusses.size()) return;
+        slot = &m_consoleBusses[channelIdx].pluginSlots[slotIdx];
+    } else {
+        if (channelIdx < 0 || channelIdx >= m_consoleRows.size()) return;
+        slot = &m_consoleRows[channelIdx].pluginSlots[slotIdx];
+    }
+
+    if (!slot) return;
+
+    slot->pluginName = pluginName;
+    if (slot->slotBtn) {
+        slot->slotBtn->setText(pluginName);
+        slot->slotBtn->setProperty("loaded", true);
+        slot->slotBtn->style()->unpolish(slot->slotBtn);
+        slot->slotBtn->style()->polish(slot->slotBtn);
+    }
+
+    QString cmd = QString("LOAD %1 %2").arg(slot->shmName).arg(pluginName);
+    sendDaemonCommand(cmd);
+    saveMixerConfig();
+}
+
+void MainWindow::unloadPluginAtSlot(int channelIdx, int slotIdx, bool isBus) {
+    PluginSlot *slot = nullptr;
+    if (isBus) {
+        if (channelIdx < 0 || channelIdx >= m_consoleBusses.size()) return;
+        slot = &m_consoleBusses[channelIdx].pluginSlots[slotIdx];
+    } else {
+        if (channelIdx < 0 || channelIdx >= m_consoleRows.size()) return;
+        slot = &m_consoleRows[channelIdx].pluginSlots[slotIdx];
+    }
+
+    if (!slot) return;
+
+    slot->pluginName = "";
+    if (slot->slotBtn) {
+        slot->slotBtn->setText("-");
+        slot->slotBtn->setProperty("loaded", false);
+        slot->slotBtn->style()->unpolish(slot->slotBtn);
+        slot->slotBtn->style()->polish(slot->slotBtn);
+    }
+    if (slot->bypassBtn) {
+        slot->bypassBtn->setChecked(false);
+    }
+    slot->bypassed = false;
+
+    QString cmd = QString("UNLOAD %1").arg(slot->shmName);
+    sendDaemonCommand(cmd);
+    saveMixerConfig();
+}
+
+// =============================================================================
+// Per-slot Auto Gain Staging
+// =============================================================================
+void MainWindow::toggleSlotAutoGain(int channelIdx, int slotIdx, bool isBus) {
+    PluginSlot *slot = nullptr;
+    if (isBus) {
+        if (channelIdx < 0 || channelIdx >= m_consoleBusses.size()) return;
+        slot = &m_consoleBusses[channelIdx].pluginSlots[slotIdx];
+    } else {
+        if (channelIdx < 0 || channelIdx >= m_consoleRows.size()) return;
+        slot = &m_consoleRows[channelIdx].pluginSlots[slotIdx];
+    }
+    if (!slot) return;
+
+    if (slot->autoGainBtn) {
+        slot->autoGain = slot->autoGainBtn->isChecked();
+    } else {
+        slot->autoGain = !slot->autoGain;
+    }
+
+    QString agCmd = QString("AUTOGAIN_PLUGIN %1 %2")
+                    .arg(slot->shmName)
+                    .arg(slot->autoGain ? 1 : 0);
+    sendDaemonCommand(agCmd);
+    saveMixerConfig();
+}
+
+// =============================================================================
+// Plugin Editor Window Display (Wine X11 floating window)
+// =============================================================================
+void MainWindow::openPluginEditorWindow(const QString &shmName) {
+    // Step 1: Tell the guest to open its editor
+    sendDaemonCommand(QString("OPEN_EDITOR %1").arg(shmName));
+
+    // Step 2: Resolve the socket path
+    QString sockPath = "/tmp/arthur.sock";
+    QByteArray xdg = qgetenv("XDG_RUNTIME_DIR");
+    if (!xdg.isEmpty()) {
+        sockPath = QString(xdg) + "/arthur.sock";
+    }
+
+    // Step 3: Poll for the XID using a timer (10 attempts x 300ms = 3s max)
+    struct PollState {
+        int attempts = 0;
+        QString shmName;
+        QString sockPath;
+        MainWindow *self = nullptr;
+    };
+    PollState *state = new PollState{0, shmName, sockPath, this};
+
+    QTimer *pollTimer = new QTimer(this);
+    pollTimer->setInterval(300);
+    pollTimer->setSingleShot(false);
+
+    connect(pollTimer, &QTimer::timeout, this, [state, pollTimer]() {
+        state->attempts++;
+
+        QLocalSocket sock;
+        sock.connectToServer(state->sockPath);
+        uint64_t xid = 0;
+        uint32_t w = 800, h = 600;
+
+        if (sock.waitForConnected(100)) {
+            QString query = QString("GET_EDITOR_XID %1").arg(state->shmName);
+            sock.write(query.toUtf8());
+            sock.waitForBytesWritten(100);
+            if (sock.waitForReadyRead(200)) {
+                QString reply = QString::fromUtf8(sock.readAll()).trimmed();
+                if (reply.startsWith("XID ")) {
+                    QStringList parts = reply.split(' ', Qt::SkipEmptyParts);
+                    if (parts.size() >= 2) xid = parts[1].toULongLong();
+                    if (parts.size() >= 4) {
+                        w = parts[2].toUInt();
+                        h = parts[3].toUInt();
+                    }
+                }
+            }
+        }
+
+        if (xid != 0) {
+            pollTimer->stop();
+            pollTimer->deleteLater();
+
+            // Wrap the Wine X11 window in a Qt floating container
+            QWindow *pluginWin = QWindow::fromWinId(static_cast<WId>(xid));
+            if (pluginWin) {
+                QWidget *container = QWidget::createWindowContainer(
+                    pluginWin, nullptr,
+                    Qt::Tool | Qt::WindowStaysOnTopHint | Qt::WindowCloseButtonHint);
+                container->setWindowTitle(
+                    QString("Plugin Editor — %1").arg(state->shmName));
+                container->setAttribute(Qt::WA_DeleteOnClose, true);
+                container->resize(
+                    static_cast<int>(w > 0 ? w : 800u),
+                    static_cast<int>(h > 0 ? h : 600u));
+                container->show();
+                container->raise();
+                container->activateWindow();
+            }
+            delete state;
+        } else if (state->attempts >= 10) {
+            pollTimer->stop();
+            pollTimer->deleteLater();
+            QMessageBox::warning(
+                state->self, "Plugin Editor",
+                "Could not open plugin editor.\n"
+                "The Wine guest process may not have started yet.\n"
+                "Try again in a moment after loading the plugin.");
+            delete state;
+        }
+    });
+
+    pollTimer->start();
 }

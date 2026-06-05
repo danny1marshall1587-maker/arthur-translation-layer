@@ -109,7 +109,7 @@ struct ArthurAtomic {
  */
 struct AudioSharedMemory {
     // Version tag — must be first field for mismatch detection
-    static constexpr uint32_t SHM_VERSION = 5; // Bumped version due to console_mode addition
+    static constexpr uint32_t SHM_VERSION = 8; // Bumped: added auto_gain field for per-plugin RMS staging
     uint32_t version = SHM_VERSION;
 
     // Transport state machine — cache-line aligned for performance
@@ -142,6 +142,14 @@ struct AudioSharedMemory {
 
     // VHC Console Mode: 0 = Playback, 1 = Record Dry / Monitor Wet, 2 = Record Wet
     ArthurAtomic<uint32_t> console_mode{0};
+
+    // Bypass field for guest VST3 plugins: 0 = active, 1 = bypassed
+    ArthurAtomic<uint32_t> bypass{0};
+
+    // Per-plugin auto gain staging: 0 = off, 1 = on
+    // When enabled, win_guest_agent scales output buffers so RMS matches input RMS,
+    // keeping perceived level identical whether the plugin is active or bypassed.
+    ArthurAtomic<uint32_t> auto_gain{0};
 
     // GUI control variables (X11 / XWayland windowing bridge)
     ArthurAtomic<uint64_t> host_window_xid{0};

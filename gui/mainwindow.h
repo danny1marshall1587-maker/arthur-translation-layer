@@ -83,6 +83,13 @@ private slots:
     void loadPlugin(int slotIdx);
     void unloadPlugin(int slotIdx);
     void openPluginGui(int slotIdx);
+    void handleSlotClicked(int channelIdx, int slotIdx, bool isBus);
+    void toggleSlotBypass(int channelIdx, int slotIdx, bool isBus);
+    void toggleAutoGain(int channelIdx, bool isBus);
+    void toggleSlotAutoGain(int channelIdx, int slotIdx, bool isBus);
+    void openPluginEditorWindow(const QString &shmName);
+    void loadPluginAtSlot(int channelIdx, int slotIdx, const QString &pluginName, bool isBus);
+    void unloadPluginAtSlot(int channelIdx, int slotIdx, bool isBus);
 
 private:
     void initUi();
@@ -107,24 +114,40 @@ private:
     QWidget *m_settingsTab;
     QWidget *m_consoleTab;
 
+    struct PluginSlot {
+        QPushButton *slotBtn = nullptr;
+        QPushButton *bypassBtn = nullptr;
+        QPushButton *autoGainBtn = nullptr;  // per-slot RMS level-match toggle
+        QString pluginName;
+        bool bypassed = false;
+        bool autoGain = false;
+        QString shmName;
+    };
+
     struct ConsoleChannelRow {
         QLabel *nameLabel = nullptr;
         QComboBox *modeSelect = nullptr;
+        PluginSlot pluginSlots[4];
         QSlider *volumeSlider = nullptr;
         QProgressBar *levelMeter = nullptr;
         QDial *sendReverb = nullptr;
         QDial *sendDelay = nullptr;
         QPushButton *muteBtn = nullptr;
         QPushButton *soloBtn = nullptr;
+        QPushButton *autoGainBtn = nullptr;
+        bool autoGainEnabled = false;
         QString shmName;
     };
     QList<ConsoleChannelRow> m_consoleRows;
 
     struct ConsoleBusRow {
         QString name;
+        PluginSlot pluginSlots[4];
         QSlider *volumeSlider = nullptr;
         QProgressBar *levelMeter = nullptr;
         QPushButton *muteBtn = nullptr;
+        QPushButton *autoGainBtn = nullptr;
+        bool autoGainEnabled = false;
     };
     QList<ConsoleBusRow> m_consoleBusses;
 

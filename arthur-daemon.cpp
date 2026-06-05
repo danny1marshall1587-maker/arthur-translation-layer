@@ -636,7 +636,117 @@ void handle_client(int client_fd) {
                 }
             }
         }
+    } else if (cmd.find("BYPASS_PLUGIN") == 0) {
+        // BYPASS_PLUGIN <shm_name> <0_or_1>
+        std::istringstream ss(cmd);
+        std::string token, shm_name;
+        int bypass_val = 0;
+        ss >> token >> shm_name >> bypass_val;
+        if (shm_name.empty()) {
+            std::string resp = "ERROR: Bad BYPASS_PLUGIN args";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+        } else {
+            std::string full_shm = "/" + shm_name;
+            int fd = shm_open(full_shm.c_str(), O_RDWR, 0600);
+            if (fd < 0) {
+                std::string resp = "ERROR: shm_open failed for " + shm_name;
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            } else {
+                void *ptr = mmap(nullptr, sizeof(arthur::AudioSharedMemory),
+                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                close(fd);
+                if (ptr == MAP_FAILED) {
+                    std::string resp = "ERROR: mmap failed";
+                    send(client_fd, resp.c_str(), resp.length(), 0);
+                } else {
+                    auto *layout = reinterpret_cast<arthur::AudioSharedMemory*>(ptr);
+                    if (layout->version == arthur::AudioSharedMemory::SHM_VERSION) {
+                        layout->bypass.store(static_cast<uint32_t>(bypass_val),
+                                             std::memory_order_release);
+                        std::string resp = "OK";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    } else {
+                        std::string resp = "ERROR: SHM version mismatch";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    }
+                    munmap(ptr, sizeof(arthur::AudioSharedMemory));
+                }
+            }
+        }
+    } else if (cmd.find("AUTOGAIN_PLUGIN") == 0) {
+        // AUTOGAIN_PLUGIN <shm_name> <0_or_1>
+        std::istringstream ss(cmd);
+        std::string token, shm_name;
+        int ag_val = 0;
+        ss >> token >> shm_name >> ag_val;
+        if (shm_name.empty()) {
+            std::string resp = "ERROR: Bad AUTOGAIN_PLUGIN args";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+        } else {
+            std::string full_shm = "/" + shm_name;
+            int fd = shm_open(full_shm.c_str(), O_RDWR, 0600);
+            if (fd < 0) {
+                std::string resp = "ERROR: shm_open failed for " + shm_name;
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            } else {
+                void *ptr = mmap(nullptr, sizeof(arthur::AudioSharedMemory),
+                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                close(fd);
+                if (ptr == MAP_FAILED) {
+                    std::string resp = "ERROR: mmap failed";
+                    send(client_fd, resp.c_str(), resp.length(), 0);
+                } else {
+                    auto *layout = reinterpret_cast<arthur::AudioSharedMemory*>(ptr);
+                    if (layout->version == arthur::AudioSharedMemory::SHM_VERSION) {
+                        layout->auto_gain.store(static_cast<uint32_t>(ag_val),
+                                               std::memory_order_release);
+                        std::string resp = "OK";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    } else {
+                        std::string resp = "ERROR: SHM version mismatch";
+                        send(client_fd, resp.c_str(), resp.length(), 0);
+                    }
+                    munmap(ptr, sizeof(arthur::AudioSharedMemory));
+                }
+            }
+        }
+    } else if (cmd.find("GET_EDITOR_XID") == 0) {
+        // GET_EDITOR_XID <shm_name>
+        // Returns: "XID <xid_decimal> <width> <height>" or "XID 0" if not open
+        std::istringstream ss(cmd);
+        std::string token, shm_name;
+        ss >> token >> shm_name;
+        if (shm_name.empty()) {
+            std::string resp = "ERROR: Bad GET_EDITOR_XID args";
+            send(client_fd, resp.c_str(), resp.length(), 0);
+        } else {
+            std::string full_shm = "/" + shm_name;
+            int fd = shm_open(full_shm.c_str(), O_RDWR, 0600);
+            if (fd < 0) {
+                std::string resp = "XID 0";
+                send(client_fd, resp.c_str(), resp.length(), 0);
+            } else {
+                void *ptr = mmap(nullptr, sizeof(arthur::AudioSharedMemory),
+                                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+                close(fd);
+                if (ptr == MAP_FAILED) {
+                    std::string resp = "XID 0";
+                    send(client_fd, resp.c_str(), resp.length(), 0);
+                } else {
+                    auto *layout = reinterpret_cast<arthur::AudioSharedMemory*>(ptr);
+                    uint64_t xid = layout->guest_window_xid.load(std::memory_order_acquire);
+                    uint32_t w   = layout->editor_width.load(std::memory_order_acquire);
+                    uint32_t h   = layout->editor_height.load(std::memory_order_acquire);
+                    munmap(ptr, sizeof(arthur::AudioSharedMemory));
+                    std::string resp = "XID " + std::to_string(xid)
+                                     + " " + std::to_string(w)
+                                     + " " + std::to_string(h);
+                    send(client_fd, resp.c_str(), resp.length(), 0);
+                }
+            }
+        }
     } else {
+
         std::string resp = "ERROR: Unknown command";
         send(client_fd, resp.c_str(), resp.length(), 0);
     }

@@ -13,6 +13,7 @@
 #include <sstream>
 #include <fstream>
 #include <cstring>
+#include <cmath>
 
 #include "AudioIPC.h"
 
@@ -790,7 +791,58 @@ int main(int argc, char* argv[]) {
             processData.outputParameterChanges = &emptyOutputParams;
 
             // Process audio through the VST3 plugin!
-            audioProcessor->process(processData);
+            uint32_t numSamples = layout->sample_count.load(std::memory_order_relaxed);
+            bool do_autogain = (layout->auto_gain.load(std::memory_order_relaxed) != 0);
+
+            // --- Per-plugin RMS capture BEFORE processing (stack-only, RT-safe) ---
+            float input_rms[SHM_MAX_CHANNELS] = {};
+            if (do_autogain) {
+                for (uint32_t c = 0; c < numInputs && c < SHM_MAX_CHANNELS; ++c) {
+                    float sum = 0.f;
+                    const float* buf = layout->input_buffers[c];
+                    for (uint32_t n = 0; n < numSamples; ++n) {
+                        sum += buf[n] * buf[n];
+                    }
+                    input_rms[c] = (numSamples > 0) ? std::sqrt(sum / (float)numSamples) : 0.f;
+                }
+            }
+
+            if (layout->bypass.load(std::memory_order_relaxed) != 0) {
+                for (uint32_t c = 0; c < numOutputs; ++c) {
+                    if (c < numInputs) {
+                        std::memcpy(layout->output_buffers[c], layout->input_buffers[c], numSamples * sizeof(float));
+                    } else {
+                        std::memset(layout->output_buffers[c], 0, numSamples * sizeof(float));
+                    }
+                }
+            } else {
+                audioProcessor->process(processData);
+
+                // --- Per-plugin RMS auto-gain correction AFTER processing ---
+                if (do_autogain) {
+                    for (uint32_t c = 0; c < numOutputs && c < SHM_MAX_CHANNELS; ++c) {
+                        float sum = 0.f;
+                        float* buf = layout->output_buffers[c];
+                        for (uint32_t n = 0; n < numSamples; ++n) {
+                            sum += buf[n] * buf[n];
+                        }
+                        float out_rms = (numSamples > 0) ? std::sqrt(sum / (float)numSamples) : 0.f;
+
+                        // Only apply correction when both input and output are audible
+                        float in_rms = (c < numInputs) ? input_rms[c] : 0.f;
+                        if (out_rms > 1e-6f && in_rms > 1e-6f) {
+                            float gain = in_rms / out_rms;
+                            // Clamp: -24 dB (0.063) to +24 dB (15.849)
+                            if (gain < 0.063f) gain = 0.063f;
+                            if (gain > 15.849f) gain = 15.849f;
+                            for (uint32_t n = 0; n < numSamples; ++n) {
+                                buf[n] *= gain;
+                            }
+                        }
+                    }
+                }
+            }
+
 
             serialize_guest_events_to_shm(outputEvents, layout);
 
